@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "ZenFocus",
+    "slug": "zenfocus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "zenfocus",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zenfocus.app",
+      "entitlements": {
+        "com.apple.developer.family-controls": true,
+        "com.apple.security.application-groups": ["group.com.zenfocus.app"]
+      }
+    },
+    "android": {
+      "package": "com.zenfocus.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#11131F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.ACCESS_NOTIFICATION_POLICY",
+        "android.permission.FOREGROUND_SERVICE"
+      ]
+    },
+    "plugins": [
+      "./plugins/withAndroidDpc",
+      "./plugins/withIosScreenTime"
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

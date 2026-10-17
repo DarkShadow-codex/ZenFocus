@@ -1,0 +1,116 @@
+# ============================================================================
+# ZENFOCUS MOBILE .GITIGNORE
+# Protects all private credentials, keystores, certificates, and local environment files
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. Environment & API Secrets
+# ----------------------------------------------------------------------------
+.env
+.env.*
+.env*.local
+.env.development
+.env.test
+.env.production
+*.env
+secrets/
+secrets.*
+credentials/
+credentials.*
+credentials.json
+service-account*.json
+serviceAccountKey*.json
+client_secret*.json
+config.local.json
+*.private.*
+
+# ----------------------------------------------------------------------------
+# 2. Android Keystores, Signing Keys & Google Services
+# ----------------------------------------------------------------------------
+*.jks
+*.keystore
+*.key
+release.keystore
+debug.keystore
+key.properties
+signing-*.properties
+google-services.json
+play-store-*.json
+api-key*.json
+android/app/release.keystore
+android/app/debug.keystore
+
+# ----------------------------------------------------------------------------
+# 3. Apple iOS Certificates, Private Keys & Provisioning Profiles
+# ----------------------------------------------------------------------------
+*.p8
+*.p12
+*.pem
+*.cer
+*.cert
+*.crt
+*.der
+*.mobileprovision
+*.provisionprofile
+AuthKey_*.p8
+GoogleService-Info.plist
+ExportOptions.plist
+
+# ----------------------------------------------------------------------------
+# 4. Fastlane & CI/CD Credentials
+# ----------------------------------------------------------------------------
+fastlane/README.md
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+Appfile
+Matchfile
+
+# ----------------------------------------------------------------------------
+# 5. Expo & EAS Build / Session Artifacts
+# ----------------------------------------------------------------------------
+.expo/
+.expo-shared/
+.eas/
+dist/
+web-build/
+expo-env.d.ts
+
+# ----------------------------------------------------------------------------
+# 6. Dependencies & Generated Native Directories
+# ----------------------------------------------------------------------------
+node_modules/
+/ios/
+/android/
+.kotlin/
+*.orig.*
+
+# ----------------------------------------------------------------------------
+# 7. Metro, Logs & Debugging
+# ----------------------------------------------------------------------------
+.metro-health-check*
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ----------------------------------------------------------------------------
+# 8. OS & IDE Private Settings
+# ----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*.tsbuildinfo
+coverage/
+.system_generated/

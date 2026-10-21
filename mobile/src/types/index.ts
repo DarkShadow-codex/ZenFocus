@@ -53,7 +53,7 @@ export interface RestrictionPolicy {
   policyType: PolicyType;
   targetPackage: string; // Android package name, e.g. "com.zhiliaoapp.musically"
   appName: string;
-  appCategory: 'Social' | 'Entertainment' | 'Gaming' | 'Productivity';
+  appCategory: 'Social' | 'Entertainment' | 'Gaming' | 'Productivity' | 'Utilities';
   appIcon: string;
   iconBg: string;
   desiredState: 'active' | 'inactive';
@@ -129,3 +129,55 @@ export interface TemporaryUnlock {
   expiresAt: string;
   durationMinutes: number;
 }
+
+export interface ChildDevice {
+  id: string;
+  childName: string;
+  deviceName: string;
+  platform: DevicePlatform; // 'android' | 'ios'
+  pairingCode: string;
+  isOnline: boolean;
+  batteryLevel: number;
+  lastSyncAt: string;
+  appVersion: string;
+  osVersion: string;
+  activeRestrictionsCount?: number;
+}
+
+export type ParentTab = 'DASHBOARD' | 'INSTA_SAVE';
+
+export interface ScannedApp {
+  targetPackage: string; // Android package name or iOS bundle ID
+  appName: string;
+  appCategory: 'Social' | 'Entertainment' | 'Gaming' | 'Productivity' | 'Utilities';
+  appIcon: string;
+  iconBg: string;
+  isSystemApp: boolean;
+  isRestricted: boolean;
+  installDate?: string;
+  platform: DevicePlatform;
+  sizeMb?: number;
+  discoveredAt: string;
+  isNewlyDiscovered?: boolean;
+}
+
+export interface ScanResult {
+  childDeviceId: string;
+  childName: string;
+  platform: DevicePlatform;
+  scannedAt: string;
+  totalApps: number;
+  restrictedCount?: number;
+  newlyDiscoveredCount?: number;
+  apps: ScannedApp[];
+  summary: {
+    socialCount: number;
+    gamingCount: number;
+    entertainmentCount: number;
+    productivityCount: number;
+    utilitiesCount: number;
+    blockedCount: number;
+  };
+}
+
+

@@ -4,7 +4,7 @@
 // ============================================================================
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Palette, Radii } from '../theme';
 import { UserAccount } from '../types';
@@ -13,6 +13,8 @@ interface HeaderBarProps {
   account: UserAccount | null;
   activeView: 'CHILD' | 'PARENT';
   onSwitchView: (view: 'CHILD' | 'PARENT') => void;
+  activeParentTab?: 'DASHBOARD' | 'INSTA_SAVE';
+  onSwitchParentTab?: (tab: 'DASHBOARD' | 'INSTA_SAVE') => void;
   themeMode: 'light' | 'dark';
   onToggleTheme: () => void;
   onSignOut: () => void;
@@ -22,6 +24,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   account,
   activeView,
   onSwitchView,
+  activeParentTab = 'DASHBOARD',
+  onSwitchParentTab,
   themeMode,
   onToggleTheme,
   onSignOut,
@@ -49,30 +53,48 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.surfaceBorder }]}>
       {/* Brand logo & title */}
       <View style={styles.brandRow}>
-        <View style={styles.logoCircle}>
-          <Ionicons name="infinite" size={18} color="#ffffff" />
-        </View>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
         <Text style={[styles.brandTitle, { color: theme.textPrimary }]}>ZenFocus</Text>
       </View>
 
       {/* Role-Gated Middle Section */}
       {isParent && (
-        // PARENT ACCOUNT: Both dashboards are accessible!
+        // PARENT ACCOUNT: Parent Control and Child View
         <View style={[styles.roleSwitcher, { backgroundColor: theme.surfaceSecondary, borderColor: theme.surfaceBorder }]}>
           <TouchableOpacity
-            style={[styles.roleTab, activeView === 'PARENT' && [styles.roleTabActive, { backgroundColor: theme.surface }]]}
+            style={[
+              styles.roleTab,
+              activeView === 'PARENT' && [styles.roleTabActive, { backgroundColor: theme.surface }],
+            ]}
             onPress={() => onSwitchView('PARENT')}
           >
-            <Text style={[styles.roleTabText, { color: activeView === 'PARENT' ? Palette.primary : theme.textSecondary }]}>
+            <Text
+              style={[
+                styles.roleTabText,
+                { color: activeView === 'PARENT' ? Palette.primary : theme.textSecondary },
+              ]}
+            >
               🛡️ Parent Control
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.roleTab, activeView === 'CHILD' && [styles.roleTabActive, { backgroundColor: theme.surface }]]}
+            style={[
+              styles.roleTab,
+              activeView === 'CHILD' && [styles.roleTabActive, { backgroundColor: theme.surface }],
+            ]}
             onPress={() => onSwitchView('CHILD')}
           >
-            <Text style={[styles.roleTabText, { color: activeView === 'CHILD' ? Palette.primary : theme.textSecondary }]}>
+            <Text
+              style={[
+                styles.roleTabText,
+                { color: activeView === 'CHILD' ? Palette.primary : theme.textSecondary },
+              ]}
+            >
               🧘 Child View
             </Text>
           </TouchableOpacity>
@@ -129,6 +151,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    borderRadius: Radii.sm,
   },
   logoCircle: {
     width: 30,

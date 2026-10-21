@@ -15,6 +15,10 @@ import {
   Schedule,
   CompletedSession,
   TemporaryUnlock,
+  ChildDevice,
+  ParentTab,
+  ScannedApp,
+  ScanResult,
 } from '../types';
 import { ZenFocusDpc } from '../native/ZenFocusDpcBridge';
 import { ZenFocusIos } from '../native/ZenFocusIosBridge';
@@ -71,11 +75,294 @@ const DEFAULT_SCHEDULES: Schedule[] = [
   },
 ];
 
+export const DEFAULT_CHILD_DEVICES: ChildDevice[] = [
+  {
+    id: 'dev_leo_s24',
+    childName: 'Leo',
+    deviceName: 'Samsung Galaxy S24',
+    platform: 'android',
+    pairingCode: 'ZEN-8942',
+    isOnline: true,
+    batteryLevel: 84,
+    lastSyncAt: new Date().toISOString(),
+    appVersion: '1.0.4-dpc',
+    osVersion: 'Android 14',
+    activeRestrictionsCount: 2,
+  },
+  {
+    id: 'dev_maya_iphone15',
+    childName: 'Maya',
+    deviceName: 'iPhone 15 Pro',
+    platform: 'ios',
+    pairingCode: 'ZEN-3190',
+    isOnline: true,
+    batteryLevel: 92,
+    lastSyncAt: new Date().toISOString(),
+    appVersion: '1.0.0-screentime',
+    osVersion: 'iOS 17.4',
+    activeRestrictionsCount: 3,
+  },
+  {
+    id: 'dev_sam_pixel8',
+    childName: 'Sam',
+    deviceName: 'Google Pixel 8',
+    platform: 'android',
+    pairingCode: 'ZEN-5512',
+    isOnline: true,
+    batteryLevel: 67,
+    lastSyncAt: new Date(Date.now() - 7 * 60 * 1000).toISOString(),
+    appVersion: '1.0.4-dpc',
+    osVersion: 'Android 14',
+    activeRestrictionsCount: 1,
+  },
+  {
+    id: 'dev_chloe_ipad',
+    childName: 'Chloe',
+    deviceName: 'iPad Air M2',
+    platform: 'ios',
+    pairingCode: 'ZEN-7734',
+    isOnline: true,
+    batteryLevel: 78,
+    lastSyncAt: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
+    appVersion: '1.0.0-screentime',
+    osVersion: 'iOS 17.5',
+    activeRestrictionsCount: 2,
+  },
+  {
+    id: 'dev_ethan_tab',
+    childName: 'Ethan',
+    deviceName: 'Galaxy Tab S9',
+    platform: 'android',
+    pairingCode: 'ZEN-9021',
+    isOnline: true,
+    batteryLevel: 55,
+    lastSyncAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+    appVersion: '1.0.4-dpc',
+    osVersion: 'Android 14',
+    activeRestrictionsCount: 2,
+  },
+];
+
+const DEFAULT_POLICIES: RestrictionPolicy[] = [
+  // Leo (Android - Galaxy S24)
+  {
+    id: 'pol_tiktok_leo',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_leo_s24',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.zhiliaoapp.musically',
+    appName: 'TikTok',
+    appCategory: 'Social',
+    appIcon: '🎵',
+    iconBg: '#ff0050',
+    desiredState: 'active',
+    version: 4,
+    scheduleDescription: 'Blocked during school hours (8am - 4pm)',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'pol_instagram_leo',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_leo_s24',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.instagram.android',
+    appName: 'Instagram',
+    appCategory: 'Social',
+    appIcon: '📷',
+    iconBg: '#e1306c',
+    desiredState: 'active',
+    version: 3,
+    scheduleDescription: 'Blocked until 7:00 PM',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'pol_youtube_leo',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_leo_s24',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.google.android.youtube',
+    appName: 'YouTube',
+    appCategory: 'Entertainment',
+    appIcon: '▶',
+    iconBg: '#ff0000',
+    desiredState: 'inactive',
+    version: 2,
+    scheduleDescription: 'Allowed for educational study tutorials',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+
+  // Maya (iOS - iPhone 15 Pro)
+  {
+    id: 'pol_tiktok_maya',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_maya_iphone15',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.zhiliaoapp.musically.ios',
+    appName: 'TikTok',
+    appCategory: 'Social',
+    appIcon: '🎵',
+    iconBg: '#ff0050',
+    desiredState: 'active',
+    version: 2,
+    scheduleDescription: 'Apple Screen Time Shield Active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'pol_roblox_maya',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_maya_iphone15',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.roblox.robloxmobile',
+    appName: 'Roblox',
+    appCategory: 'Gaming',
+    appIcon: '🎮',
+    iconBg: '#e2231a',
+    desiredState: 'active',
+    version: 1,
+    scheduleDescription: 'Shielded via FamilyActivitySelection',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'pol_instagram_maya',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_maya_iphone15',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.burbn.instagram',
+    appName: 'Instagram',
+    appCategory: 'Social',
+    appIcon: '📷',
+    iconBg: '#e1306c',
+    desiredState: 'active',
+    version: 3,
+    scheduleDescription: 'ManagedSettings Shield applied',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+
+  // Sam (Android - Pixel 8)
+  {
+    id: 'pol_snapchat_sam',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_sam_pixel8',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.snapchat.android',
+    appName: 'Snapchat',
+    appCategory: 'Social',
+    appIcon: '👻',
+    iconBg: '#fffc00',
+    desiredState: 'active',
+    version: 1,
+    scheduleDescription: 'DPC Package suspended',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+
+  // Chloe (iOS - iPad Air)
+  {
+    id: 'pol_youtube_chloe',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_chloe_ipad',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.google.ios.youtube',
+    appName: 'YouTube',
+    appCategory: 'Entertainment',
+    appIcon: '▶',
+    iconBg: '#ff0000',
+    desiredState: 'active',
+    version: 2,
+    scheduleDescription: 'Screen Time restricted',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'pol_roblox_chloe',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_chloe_ipad',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.roblox.robloxmobile',
+    appName: 'Roblox',
+    appCategory: 'Gaming',
+    appIcon: '🎮',
+    iconBg: '#e2231a',
+    desiredState: 'active',
+    version: 1,
+    scheduleDescription: 'Shielded during study hours',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+
+  // Ethan (Android - Galaxy Tab S9)
+  {
+    id: 'pol_discord_ethan',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_ethan_tab',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.discord',
+    appName: 'Discord',
+    appCategory: 'Social',
+    appIcon: '💬',
+    iconBg: '#5865f2',
+    desiredState: 'active',
+    version: 1,
+    scheduleDescription: 'Suspended during study time',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'pol_tiktok_ethan',
+    familyRelationshipId: 'fam_default',
+    targetDeviceId: 'dev_ethan_tab',
+    ownerType: 'parent',
+    policyType: 'app_block',
+    targetPackage: 'com.zhiliaoapp.musically',
+    appName: 'TikTok',
+    appCategory: 'Social',
+    appIcon: '🎵',
+    iconBg: '#ff0050',
+    desiredState: 'active',
+    version: 2,
+    scheduleDescription: 'Blocked by parent',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_APPROVALS: ApprovalRequest[] = [
+  {
+    id: 'req_001',
+    childUserId: 'usr_leo_child',
+    childName: 'Leo',
+    targetDeviceId: 'dev_leo_s24',
+    targetPackage: 'com.duolingo',
+    appName: 'Duolingo',
+    durationMinutes: 30,
+    reason: 'Need 30 min to complete my French homework streak before dinner!',
+    status: 'pending',
+    requestedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  },
+];
+
 interface TimerState {
   totalSeconds: number;
   remainingSeconds: number;
   isRunning: boolean;
   streakDays: number;
+  sessionName?: string;
 }
 
 interface ZenFocusContextType {
@@ -110,6 +397,33 @@ interface ZenFocusContextType {
   lastCompletedMinutes: number;
   takeBreak: (minutes?: number) => void;
   recordCompletedSession: (durationMinutes: number, sessionType?: string) => void;
+
+  // Multi-child device management (At least 5 devices support)
+  childDevices: ChildDevice[];
+  selectedChildDeviceId: string;
+  selectedChildDevice: ChildDevice;
+  selectChildDevice: (deviceId: string) => void;
+  pairNewChildDevice: (childName: string, deviceName: string, platform: DevicePlatform) => ChildDevice;
+  removeChildDevice: (deviceId: string) => void;
+  toggleAppRestrictionForChild: (
+    childDeviceId: string,
+    targetPackage: string,
+    appName: string,
+    appCategory: 'Social' | 'Entertainment' | 'Gaming' | 'Productivity' | 'Utilities',
+    appIcon: string,
+    iconBg: string,
+    active: boolean
+  ) => Promise<{ success: boolean; diagnostic: string }>;
+
+  // Parent Dashboard Navigation Tab ('DASHBOARD' | 'INSTA_SAVE')
+  activeParentTab: ParentTab;
+  setActiveParentTab: (tab: ParentTab) => void;
+
+  // App scanner (Android PackageManager & iOS ScreenTime FamilyActivity)
+  scannedAppsByDevice: Record<string, ScannedApp[]>;
+  isScanningApps: boolean;
+  scanChildDeviceApps: (childDeviceId: string) => Promise<ScanResult>;
+
   // Policy actions
   toggleParentPolicy: (policyId: string, desiredState: 'active' | 'inactive') => Promise<CommandReceipt>;
   toggleChildSelfPolicy: (targetPackage: string, appName: string, active: boolean) => void;
@@ -119,87 +433,25 @@ interface ZenFocusContextType {
   decideApprovalRequest: (requestId: string, approved: boolean) => void;
   // Timer actions
   setTimerPreset: (minutes: number) => void;
+  setCustomTimer: (minutes: number, sessionName?: string) => void;
+  adjustTimer: (deltaMinutes: number) => void;
   startTimer: () => void;
   pauseTimer: () => void;
   resetTimer: () => void;
 }
-
-const DEFAULT_POLICIES: RestrictionPolicy[] = [
-  {
-    id: 'pol_tiktok',
-    familyRelationshipId: 'fam_default',
-    targetDeviceId: 'dev_galaxy_s24',
-    ownerType: 'parent',
-    policyType: 'app_block',
-    targetPackage: 'com.zhiliaoapp.musically',
-    appName: 'TikTok',
-    appCategory: 'Social',
-    appIcon: '🎵',
-    iconBg: '#ff0050',
-    desiredState: 'active',
-    version: 4,
-    scheduleDescription: 'Blocked during school hours (8am - 4pm)',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'pol_instagram',
-    familyRelationshipId: 'fam_default',
-    targetDeviceId: 'dev_galaxy_s24',
-    ownerType: 'parent',
-    policyType: 'app_block',
-    targetPackage: 'com.instagram.android',
-    appName: 'Instagram',
-    appCategory: 'Social',
-    appIcon: '📷',
-    iconBg: '#e1306c',
-    desiredState: 'active',
-    version: 3,
-    scheduleDescription: 'Blocked until 7:00 PM',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'pol_youtube',
-    familyRelationshipId: 'fam_default',
-    targetDeviceId: 'dev_galaxy_s24',
-    ownerType: 'parent',
-    policyType: 'app_block',
-    targetPackage: 'com.google.android.youtube',
-    appName: 'YouTube',
-    appCategory: 'Entertainment',
-    appIcon: '▶',
-    iconBg: '#ff0000',
-    desiredState: 'inactive',
-    version: 2,
-    scheduleDescription: 'Allowed for educational study tutorials',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const DEFAULT_APPROVALS: ApprovalRequest[] = [
-  {
-    id: 'req_001',
-    childUserId: 'usr_leo_child',
-    childName: 'Leo',
-    targetDeviceId: 'dev_galaxy_s24',
-    targetPackage: 'com.duolingo',
-    appName: 'Duolingo',
-    durationMinutes: 30,
-    reason: 'Need 30 min to complete my French homework streak before dinner!',
-    status: 'pending',
-    requestedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-  },
-];
 
 const ZenFocusContext = createContext<ZenFocusContextType | undefined>(undefined);
 
 export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [activeView, setActiveViewState] = useState<'CHILD' | 'PARENT'>('CHILD');
+  const [activeParentTab, setActiveParentTab] = useState<ParentTab>('DASHBOARD');
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const [policies, setPolicies] = useState<RestrictionPolicy[]>(DEFAULT_POLICIES);
+  const [childDevices, setChildDevices] = useState<ChildDevice[]>(DEFAULT_CHILD_DEVICES);
+  const [selectedChildDeviceId, setSelectedChildDeviceId] = useState<string>('dev_leo_s24');
+  const [scannedAppsByDevice, setScannedAppsByDevice] = useState<Record<string, ScannedApp[]>>({});
+  const [isScanningApps, setIsScanningApps] = useState<boolean>(false);
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>(DEFAULT_APPROVALS);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([
     {
@@ -209,6 +461,14 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       actorRole: 'CHILD',
       eventType: 'DPC_ENROLLED',
       description: 'Galaxy S24 DPC provisioning active (Device Owner verified).',
+    },
+    {
+      id: 'aud_2',
+      timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+      actor: 'Apple ScreenTime',
+      actorRole: 'PARENT',
+      eventType: 'POLICY_APPLIED',
+      description: 'Maya iPhone 15 Pro FamilyControls authorization verified.',
     },
   ]);
 
@@ -225,22 +485,6 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isCelebrationOpen, setIsCelebrationOpen] = useState<boolean>(false);
   const [lastCompletedMinutes, setLastCompletedMinutes] = useState<number>(25);
 
-  const toggleSchedule = (scheduleId: string, active: boolean) => {
-    setSchedules((prev) =>
-      prev.map((s) => (s.id === scheduleId ? { ...s, active } : s))
-    );
-  };
-
-  const generatePairingCode = () => {
-    const randomCode = `ZEN-${Math.floor(1000 + Math.random() * 9000)}`;
-    setActivePairingCode(randomCode);
-    return randomCode;
-  };
-
-  const dismissDecisionNotice = () => {
-    setLastDecisionNotice(null);
-  };
-
   const [activePlatform, setActivePlatformState] = useState<DevicePlatform>(
     Platform.OS === 'ios' ? 'ios' : 'android'
   );
@@ -255,7 +499,7 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     dndAccessGranted: true,
     batteryOptimizationIgnored: true,
     osVersion: 'Android 14',
-    appVersion: '1.0.0-dpc',
+    appVersion: '1.0.4-dpc',
   });
 
   const [iosCapabilities, setIosCapabilities] = useState<IosScreenTimeCapabilities>({
@@ -271,9 +515,249 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     appVersion: '1.0.0-screentime',
   });
 
+  const selectedChildDevice: ChildDevice =
+    childDevices.find((d) => d.id === selectedChildDeviceId) || childDevices[0];
+
   const setActivePlatform = (platform: DevicePlatform) => {
     setActivePlatformState(platform);
     ZenFocusNative.setActivePlatformOverride(platform);
+  };
+
+  const selectChildDevice = (deviceId: string) => {
+    setSelectedChildDeviceId(deviceId);
+    const found = childDevices.find((d) => d.id === deviceId);
+    if (found) {
+      setActivePlatform(found.platform);
+    }
+    AsyncStorage.setItem('zenfocus_selected_child_id', deviceId).catch(console.error);
+  };
+
+  const pairNewChildDevice = (childName: string, deviceName: string, platform: DevicePlatform): ChildDevice => {
+    const newDevice: ChildDevice = {
+      id: `dev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      childName,
+      deviceName,
+      platform,
+      pairingCode: `ZEN-${Math.floor(1000 + Math.random() * 9000)}`,
+      isOnline: true,
+      batteryLevel: 100,
+      lastSyncAt: new Date().toISOString(),
+      appVersion: platform === 'ios' ? '1.0.0-screentime' : '1.0.4-dpc',
+      osVersion: platform === 'ios' ? 'iOS 17.5' : 'Android 14',
+      activeRestrictionsCount: 0,
+    };
+    const updated = [...childDevices, newDevice];
+    setChildDevices(updated);
+    AsyncStorage.setItem('zenfocus_child_devices', JSON.stringify(updated)).catch(console.error);
+
+    const auditItem: AuditEvent = {
+      id: `aud_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actor: 'Parent Account',
+      actorRole: 'PARENT',
+      eventType: 'DPC_ENROLLED',
+      description: `Paired new child device: ${childName} (${deviceName} - ${platform.toUpperCase()}) successfully.`,
+      safeDiagnostic: `Device paired with PIN ${newDevice.pairingCode}. Total paired devices: ${updated.length}`,
+    };
+    setAuditEvents((prev) => [auditItem, ...prev]);
+    return newDevice;
+  };
+
+  const removeChildDevice = (deviceId: string) => {
+    const updated = childDevices.filter((d) => d.id !== deviceId);
+    setChildDevices(updated);
+    if (selectedChildDeviceId === deviceId && updated.length > 0) {
+      setSelectedChildDeviceId(updated[0].id);
+      setActivePlatform(updated[0].platform);
+    }
+    AsyncStorage.setItem('zenfocus_child_devices', JSON.stringify(updated)).catch(console.error);
+  };
+
+  // Instant save app restriction toggle for a specific child device
+  const toggleAppRestrictionForChild = async (
+    childDeviceId: string,
+    targetPackage: string,
+    appName: string,
+    appCategory: 'Social' | 'Entertainment' | 'Gaming' | 'Productivity' | 'Utilities',
+    appIcon: string,
+    iconBg: string,
+    active: boolean
+  ): Promise<{ success: boolean; diagnostic: string }> => {
+    const child = childDevices.find((d) => d.id === childDeviceId);
+    const childName = child ? child.childName : 'Child';
+    const deviceName = child ? child.deviceName : 'Device';
+    const platform = child ? child.platform : 'android';
+
+    // 1. Invoke native bridge with platform awareness
+    const receipt = await ZenFocusNative.applyAppRestriction(targetPackage, active);
+
+    // 2. Update policies with monotonic version and persist immediately to AsyncStorage
+    let nextCount = 0;
+    setPolicies((prev) => {
+      const existingIndex = prev.findIndex(
+        (p) => p.targetDeviceId === childDeviceId && p.targetPackage === targetPackage
+      );
+      let updated: RestrictionPolicy[];
+      if (existingIndex >= 0) {
+        updated = prev.map((p, idx) =>
+          idx === existingIndex
+            ? {
+                ...p,
+                desiredState: (active ? 'active' : 'inactive') as 'active' | 'inactive',
+                version: p.version + 1,
+                updatedAt: new Date().toISOString(),
+              }
+            : p
+        );
+      } else {
+        const newPolicy: RestrictionPolicy = {
+          id: `pol_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          familyRelationshipId: 'fam_default',
+          targetDeviceId: childDeviceId,
+          ownerType: 'parent',
+          policyType: 'app_block',
+          targetPackage,
+          appName,
+          appCategory,
+          appIcon,
+          iconBg,
+          desiredState: active ? 'active' : 'inactive',
+          version: 1,
+          scheduleDescription: platform === 'ios' ? 'Apple Screen Time Shield Active' : 'Enforced via Android DPC',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        updated = [...prev, newPolicy];
+      }
+      // Instant save to persistent storage
+      AsyncStorage.setItem('zenfocus_policies', JSON.stringify(updated)).catch(console.error);
+      nextCount = updated.filter(
+        (p) => p.targetDeviceId === childDeviceId && p.desiredState === 'active'
+      ).length;
+      return updated;
+    });
+
+    // 3. Update child devices counter & sync timestamp
+    setChildDevices((prev) => {
+      const updated = prev.map((d) =>
+        d.id === childDeviceId
+          ? {
+              ...d,
+              activeRestrictionsCount: nextCount,
+              lastSyncAt: new Date().toISOString(),
+            }
+          : d
+      );
+      AsyncStorage.setItem('zenfocus_child_devices', JSON.stringify(updated)).catch(console.error);
+      return updated;
+    });
+
+    // 4. Update scanned apps list for this device if loaded
+    setScannedAppsByDevice((prev) => {
+      const devApps = prev[childDeviceId];
+      if (!devApps) return prev;
+      const updated = devApps.map((a) =>
+        a.targetPackage === targetPackage ? { ...a, isRestricted: active } : a
+      );
+      AsyncStorage.setItem(`zenfocus_scanned_apps_${childDeviceId}`, JSON.stringify(updated)).catch(console.error);
+      return {
+        ...prev,
+        [childDeviceId]: updated,
+      };
+    });
+
+    // 5. Record audit event
+    const auditItem: AuditEvent = {
+      id: `aud_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actor: 'Parent Account',
+      actorRole: 'PARENT',
+      eventType: active ? 'POLICY_APPLIED' : 'POLICY_REMOVED',
+      description: `⚡ Insta-Saved: ${appName} (${targetPackage}) set to ${active ? 'BLOCKED' : 'ALLOWED'} on ${childName}'s ${deviceName}.`,
+      safeDiagnostic: receipt.safeDiagnostic || (platform === 'ios' ? 'Screen Time shield applied' : 'DPC package suspended'),
+    };
+    setAuditEvents((prev) => [auditItem, ...prev]);
+
+    return {
+      success: receipt.status === 'applied' || receipt.status === 'queued',
+      diagnostic: receipt.safeDiagnostic || `Insta-Saved to ${childName}'s device.`,
+    };
+  };
+
+  /**
+   * Scans installed applications on the selected child device.
+   * - Uses Android PackageManager / DPC on Android devices
+   * - Uses Apple Screen Time FamilyControls / ManagedSettings on iOS devices
+   * - Returns comprehensive ScanResult with categorization and newly discovered app flags
+   */
+  const scanChildDeviceApps = async (childDeviceId: string): Promise<ScanResult> => {
+    setIsScanningApps(true);
+    const child = childDevices.find((d) => d.id === childDeviceId);
+    const childName = child ? child.childName : 'Child';
+    const deviceName = child ? child.deviceName : 'Device';
+    const platform = child ? child.platform : activePlatform;
+
+    try {
+      // Simulate slight network/hardware scan delay for realistic UI feedback
+      await new Promise((r) => setTimeout(r, 650));
+
+      const rawScanned = await ZenFocusNative.scanInstalledApps(platform);
+
+      // Correlate with current policies for this device
+      const correlated: ScannedApp[] = rawScanned.map((app) => {
+        const pol = policies.find(
+          (p) => p.targetDeviceId === childDeviceId && p.targetPackage === app.targetPackage
+        );
+        return {
+          ...app,
+          isRestricted: pol ? pol.desiredState === 'active' : app.isRestricted,
+        };
+      });
+
+      setScannedAppsByDevice((prev) => ({
+        ...prev,
+        [childDeviceId]: correlated,
+      }));
+
+      await AsyncStorage.setItem(
+        `zenfocus_scanned_apps_${childDeviceId}`,
+        JSON.stringify(correlated)
+      );
+
+      const scanResult: ScanResult = {
+        childDeviceId,
+        childName,
+        platform,
+        scannedAt: new Date().toISOString(),
+        totalApps: correlated.length,
+        restrictedCount: correlated.filter((a) => a.isRestricted).length,
+        newlyDiscoveredCount: correlated.filter((a) => a.isNewlyDiscovered).length,
+        apps: correlated,
+        summary: {
+          socialCount: correlated.filter((a) => a.appCategory === 'Social').length,
+          gamingCount: correlated.filter((a) => a.appCategory === 'Gaming').length,
+          entertainmentCount: correlated.filter((a) => a.appCategory === 'Entertainment').length,
+          productivityCount: correlated.filter((a) => a.appCategory === 'Productivity').length,
+          utilitiesCount: correlated.filter((a) => a.appCategory === 'Utilities').length,
+          blockedCount: correlated.filter((a) => a.isRestricted).length,
+        },
+      };
+
+      const auditItem: AuditEvent = {
+        id: `aud_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actor: 'App Scanner',
+        actorRole: 'PARENT',
+        eventType: 'DPC_ENROLLED',
+        description: `Scanned ${correlated.length} apps on ${childName}'s ${deviceName} (${platform.toUpperCase()}). ${scanResult.newlyDiscoveredCount} newly discovered.`,
+        safeDiagnostic: `Platform scan completed via ${platform === 'ios' ? 'Apple FamilyControls / Screen Time' : 'Android PackageManager / DPC'}.`,
+      };
+      setAuditEvents((prev) => [auditItem, ...prev]);
+
+      return scanResult;
+    } finally {
+      setIsScanningApps(false);
+    }
   };
 
   const capabilities: DeviceCapabilities =
@@ -307,14 +791,16 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setTimer((prev) => {
           if (prev.remainingSeconds <= 1) {
             clearInterval(interval);
+            ZenFocusNative.stopStudySession();
             const completedMins = Math.max(1, Math.round(prev.totalSeconds / 60));
             setLastCompletedMinutes(completedMins);
             setIsCelebrationOpen(true);
+            const sessionType = prev.sessionName || (completedMins >= 60 ? 'Mastery Study Flow' : 'Deep Work Session');
             const newSess: CompletedSession = {
               id: `sess_${Date.now()}`,
               durationMinutes: completedMins,
               completedAt: new Date().toISOString(),
-              sessionType: 'Deep Work Session',
+              sessionType,
             };
             setStudyHistory((hist) => [newSess, ...hist]);
             return {
@@ -341,8 +827,43 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setAccount(parsed);
         setActiveViewState(parsed.role === 'PARENT' ? 'PARENT' : 'CHILD');
       }
+
       const savedTheme = await AsyncStorage.getItem('zenfocus_theme');
       if (savedTheme) setThemeMode(savedTheme as 'light' | 'dark');
+
+      const savedDevicesStr = await AsyncStorage.getItem('zenfocus_child_devices');
+      if (savedDevicesStr) {
+        const parsedDevices = JSON.parse(savedDevicesStr) as ChildDevice[];
+        if (Array.isArray(parsedDevices) && parsedDevices.length > 0) {
+          setChildDevices(parsedDevices);
+        }
+      }
+
+      const savedSelectedId = await AsyncStorage.getItem('zenfocus_selected_child_id');
+      if (savedSelectedId) {
+        setSelectedChildDeviceId(savedSelectedId);
+      }
+
+      const savedPoliciesStr = await AsyncStorage.getItem('zenfocus_policies');
+      if (savedPoliciesStr) {
+        const parsedPolicies = JSON.parse(savedPoliciesStr) as RestrictionPolicy[];
+        if (Array.isArray(parsedPolicies) && parsedPolicies.length > 0) {
+          setPolicies(parsedPolicies);
+        }
+      }
+
+      // Load cached scanned apps for each child device
+      for (const d of DEFAULT_CHILD_DEVICES) {
+        try {
+          const cachedAppsStr = await AsyncStorage.getItem(`zenfocus_scanned_apps_${d.id}`);
+          if (cachedAppsStr) {
+            const parsedApps = JSON.parse(cachedAppsStr) as ScannedApp[];
+            if (Array.isArray(parsedApps) && parsedApps.length > 0) {
+              setScannedAppsByDevice((prev) => ({ ...prev, [d.id]: parsedApps }));
+            }
+          }
+        } catch (_) {}
+      }
     } catch (e) {
       // Ignore initial load error
     }
@@ -358,9 +879,11 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createdAt: new Date().toISOString(),
     };
     setAccount(newAccount);
-    // In child account: only child dashboard is visible
-    // In parent account: both dashboards are accessible, defaults to PARENT
     setActiveViewState(role === 'PARENT' ? 'PARENT' : 'CHILD');
+    if (role === 'CHILD') {
+      // On child account: strictly enforce host device platform
+      setActivePlatform(Platform.OS === 'ios' ? 'ios' : 'android');
+    }
     await AsyncStorage.setItem('zenfocus_user_account', JSON.stringify(newAccount));
   };
 
@@ -385,6 +908,22 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     AsyncStorage.setItem('zenfocus_theme', next);
   };
 
+  const toggleSchedule = (scheduleId: string, active: boolean) => {
+    setSchedules((prev) =>
+      prev.map((s) => (s.id === scheduleId ? { ...s, active } : s))
+    );
+  };
+
+  const generatePairingCode = () => {
+    const randomCode = `ZEN-${Math.floor(1000 + Math.random() * 9000)}`;
+    setActivePairingCode(randomCode);
+    return randomCode;
+  };
+
+  const dismissDecisionNotice = () => {
+    setLastDecisionNotice(null);
+  };
+
   // Toggle Parent Policy: Executes native platform restriction (Android DPC or iOS Screen Time)
   const toggleParentPolicy = async (policyId: string, desiredState: 'active' | 'inactive'): Promise<CommandReceipt> => {
     const targetPolicy = policies.find((p) => p.id === policyId);
@@ -394,18 +933,18 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const receipt = await ZenFocusNative.applyAppRestriction(targetPolicy.targetPackage, isSuspended);
 
     // Update policies with monotonic version increment
-    setPolicies((prev) =>
-      prev.map((p) =>
-        p.id === policyId
-          ? {
-              ...p,
-              desiredState,
-              version: p.version + 1,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      )
+    const updated = policies.map((p) =>
+      p.id === policyId
+        ? {
+            ...p,
+            desiredState,
+            version: p.version + 1,
+            updatedAt: new Date().toISOString(),
+          }
+        : p
     );
+    setPolicies(updated);
+    AsyncStorage.setItem('zenfocus_policies', JSON.stringify(updated)).catch(console.error);
 
     // Append to immutable audit log
     const auditItem: AuditEvent = {
@@ -433,15 +972,16 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setPolicies((prev) => {
       const existing = prev.find((p) => p.targetPackage === targetPackage && p.ownerType === 'child');
+      let updated: RestrictionPolicy[];
       if (existing) {
-        return prev.map((p) =>
+        updated = prev.map((p) =>
           p.id === existing.id ? { ...p, desiredState: active ? 'active' : 'inactive', updatedAt: new Date().toISOString() } : p
         );
       } else {
         const newChildRule: RestrictionPolicy = {
           id: `pol_child_${Date.now()}`,
           familyRelationshipId: 'fam_default',
-          targetDeviceId: 'dev_galaxy_s24',
+          targetDeviceId: selectedChildDeviceId,
           ownerType: 'child',
           policyType: 'focus_session',
           targetPackage,
@@ -455,8 +995,10 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        return [...prev, newChildRule];
+        updated = [...prev, newChildRule];
       }
+      AsyncStorage.setItem('zenfocus_policies', JSON.stringify(updated)).catch(console.error);
+      return updated;
     });
   };
 
@@ -464,11 +1006,14 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const newPolicy: RestrictionPolicy = {
       ...newPolicyData,
       id: `pol_${Date.now()}`,
+      targetDeviceId: newPolicyData.targetDeviceId || selectedChildDeviceId,
       version: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setPolicies((prev) => [...prev, newPolicy]);
+    const updated = [...policies, newPolicy];
+    setPolicies(updated);
+    AsyncStorage.setItem('zenfocus_policies', JSON.stringify(updated)).catch(console.error);
   };
 
   // Student submits an exception request
@@ -476,8 +1021,8 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const newReq: ApprovalRequest = {
       id: `req_${Date.now()}`,
       childUserId: 'usr_leo_child',
-      childName: 'Leo',
-      targetDeviceId: 'dev_galaxy_s24',
+      childName: selectedChildDevice.childName,
+      targetDeviceId: selectedChildDeviceId,
       targetPackage,
       appName,
       durationMinutes,
@@ -491,7 +1036,7 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const audit: AuditEvent = {
       id: `aud_${Date.now()}`,
       timestamp: new Date().toISOString(),
-      actor: 'Leo (Child)',
+      actor: `${selectedChildDevice.childName} (Child)`,
       actorRole: 'CHILD',
       eventType: 'EXCEPTION_REQUESTED',
       description: `Requested ${durationMinutes}m for ${appName}: "${reason}"`,
@@ -550,15 +1095,54 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Timer controls
   const setTimerPreset = (minutes: number) => {
+    const totalSecs = Math.max(60, Math.round(minutes * 60));
+    const name = minutes >= 60 ? 'Extended Deep Study' : 'Focused Study';
     setTimer((prev) => ({
       ...prev,
-      totalSeconds: minutes * 60,
-      remainingSeconds: minutes * 60,
+      totalSeconds: totalSecs,
+      remainingSeconds: totalSecs,
       isRunning: false,
+      sessionName: name,
     }));
   };
 
+  const setCustomTimer = (minutes: number, sessionName: string = 'Custom Study Session') => {
+    const totalSecs = Math.max(60, Math.round(minutes * 60));
+    setTimer((prev) => ({
+      ...prev,
+      totalSeconds: totalSecs,
+      remainingSeconds: totalSecs,
+      isRunning: false,
+      sessionName,
+    }));
+  };
+
+  const adjustTimer = (deltaMinutes: number) => {
+    const deltaSecs = deltaMinutes * 60;
+    setTimer((prev) => {
+      let newRemaining: number;
+      let newTotal: number;
+
+      if (prev.isRunning) {
+        newRemaining = Math.max(60, prev.remainingSeconds + deltaSecs);
+        newTotal = Math.max(newRemaining, prev.totalSeconds + (deltaSecs > 0 ? deltaSecs : 0));
+        ZenFocusNative.adjustStudySession(deltaMinutes);
+      } else {
+        newTotal = Math.max(300, prev.totalSeconds + deltaSecs);
+        newRemaining = newTotal;
+      }
+
+      return {
+        ...prev,
+        totalSeconds: newTotal,
+        remainingSeconds: newRemaining,
+      };
+    });
+  };
+
   const startTimer = () => {
+    const durationMins = Math.max(1, Math.round(timer.totalSeconds / 60));
+    ZenFocusNative.startStudySession(durationMins, timer.sessionName || 'Focused Study');
     setTimer((prev) => ({ ...prev, isRunning: true }));
   };
 
@@ -567,6 +1151,9 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const resetTimer = () => {
+    if (timer.isRunning) {
+      ZenFocusNative.stopStudySession();
+    }
     setTimer((prev) => ({ ...prev, isRunning: false, remainingSeconds: prev.totalSeconds }));
   };
 
@@ -627,12 +1214,26 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         lastCompletedMinutes,
         takeBreak,
         recordCompletedSession,
+        childDevices,
+        selectedChildDeviceId,
+        selectedChildDevice,
+        selectChildDevice,
+        pairNewChildDevice,
+        removeChildDevice,
+        toggleAppRestrictionForChild,
+        activeParentTab,
+        setActiveParentTab,
+        scannedAppsByDevice,
+        isScanningApps,
+        scanChildDeviceApps,
         toggleParentPolicy,
         toggleChildSelfPolicy,
         addParentPolicy,
         submitExceptionRequest,
         decideApprovalRequest,
         setTimerPreset,
+        setCustomTimer,
+        adjustTimer,
         startTimer,
         pauseTimer,
         resetTimer,

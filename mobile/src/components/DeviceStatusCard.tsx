@@ -13,6 +13,7 @@ interface DeviceStatusCardProps {
   capabilities: DeviceCapabilities;
   themeMode: 'light' | 'dark';
   activePlatform?: DevicePlatform;
+  deviceName?: string;
   onSwitchPlatform?: (platform: DevicePlatform) => void;
 }
 
@@ -20,10 +21,14 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
   capabilities,
   themeMode,
   activePlatform = capabilities.platform,
+  deviceName,
   onSwitchPlatform,
 }) => {
   const theme = Palette[themeMode];
   const isIos = activePlatform === 'ios' || capabilities.platform === 'ios';
+
+  const defaultTitle = isIos ? 'iPhone 15 Pro (Apple Screen Time)' : 'Galaxy S24 (Android DPC)';
+  const displayDeviceName = deviceName || defaultTitle;
 
   return (
     <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
@@ -71,7 +76,7 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
           </View>
           <View>
             <Text style={[styles.deviceName, { color: theme.textPrimary }]}>
-              {isIos ? 'iPhone 15 Pro (Leo)' : 'Galaxy S24 (Leo)'}
+              {displayDeviceName}
             </Text>
             <Text style={[styles.osText, { color: theme.textSecondary }]}>
               {capabilities.osVersion} • {isIos ? 'Apple Screen Time Engine v1.0.0' : 'DPC Engine v1.0.4'}

@@ -1,6 +1,7 @@
 # ============================================================================
 # ZENFOCUS - ROOT .GITIGNORE
-# Protects all private credentials, keystores, certificates, and local environment files
+# Protects all private credentials, API keys, tokens, keystores, certificates,
+# personal user data, and local environment files.
 # ============================================================================
 
 # ----------------------------------------------------------------------------
@@ -8,24 +9,100 @@
 # ----------------------------------------------------------------------------
 .env
 .env.*
+!.env.example
+!.env*.example
 .env*.local
 .env.development
 .env.test
+.env.staging
 .env.production
 *.env
+.netrc
+.npmrc
+.yarnrc
+.yarnrc.yml
 secrets/
-secrets.*
+*.secret
+*.secrets
+secret.key
+secrets.json
+secrets.yaml
+secrets.yml
 credentials/
 credentials.*
 credentials.json
+credentials.yaml
+credentials.yml
 service-account*.json
 serviceAccountKey*.json
+service-account*.key
 client_secret*.json
+client_secrets*.json
+oauth*.json
 config.local.json
+config.local.js
+config.local.ts
+config.private.*
 *.private.*
+private/
+private_keys/
 
 # ----------------------------------------------------------------------------
-# 2. Android Keystores, Signing Keys & Google Services
+# 2. API Keys, Tokens & Authentication Secrets
+# ----------------------------------------------------------------------------
+api-key*.json
+apiKey*.json
+api_key*.json
+*.token
+*.tokens
+tokens/
+token.txt
+auth_token*
+auth_tokens*
+jwt*
+cookies*
+*.session
+session_data/
+*.auth
+*.pem
+*.key
+*.pkcs12
+*.p12
+*.pfx
+*.p8
+*.cer
+*.crt
+*.der
+*.kdbx
+*.keychain*
+*.asc
+*.gpg
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+*.pub
+master.key
+
+# ----------------------------------------------------------------------------
+# 3. Third-Party Cloud Services & Push Notification Configs
+# ----------------------------------------------------------------------------
+google-services.json
+GoogleService-Info.plist
+firebase*.json
+firebase-adminsdk*.json
+aws*.json
+aws-exports.js
+.aws/
+amplifyconfiguration*
+sentry.properties
+datadog*.json
+bugsnag*.properties
+appcenter*.json
+AppCenter-Config.plist
+
+# ----------------------------------------------------------------------------
+# 4. Android Keystores, Signing Keys & Local SDK Paths
 # ----------------------------------------------------------------------------
 *.jks
 *.keystore
@@ -33,32 +110,26 @@ config.local.json
 release.keystore
 debug.keystore
 key.properties
+signing.properties
 signing-*.properties
-google-services.json
+local.properties
 play-store-*.json
-api-key*.json
+play-console-*.json
+android/app/*.keystore
+android/app/*.jks
 android/app/release.keystore
 android/app/debug.keystore
+mobile/android/app/*.keystore
+mobile/android/app/*.jks
 
 # ----------------------------------------------------------------------------
-# 3. Apple iOS Certificates, Private Keys & Provisioning Profiles
+# 5. Apple iOS Certificates, Provisioning Profiles & Fastlane
 # ----------------------------------------------------------------------------
-*.p8
-*.p12
-*.pem
-*.cer
-*.cert
-*.crt
-*.der
 *.mobileprovision
 *.provisionprofile
 AuthKey_*.p8
-GoogleService-Info.plist
 ExportOptions.plist
-
-# ----------------------------------------------------------------------------
-# 4. Fastlane & CI/CD Credentials
-# ----------------------------------------------------------------------------
+ExportOptions-*.plist
 fastlane/README.md
 fastlane/report.xml
 fastlane/Preview.html
@@ -68,7 +139,29 @@ Appfile
 Matchfile
 
 # ----------------------------------------------------------------------------
-# 5. Expo & EAS Build / Session Artifacts
+# 6. Personal User Data, Local Storage & Databases
+# ----------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+async_storage/
+local_storage/
+storage/
+userData/
+user_data/
+user_accounts/
+personal_data/
+personal/
+*user_account*.json
+backups/
+*.backup
+*.dump
+
+# ----------------------------------------------------------------------------
+# 7. Expo, EAS & Metro Build Artifacts
 # ----------------------------------------------------------------------------
 .expo/
 .expo-shared/
@@ -77,9 +170,18 @@ dist/
 web-build/
 expo-env.d.ts
 expo_qr.png
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM.zip
+*.dSYM/
+ZenFocusBuild/
+build/
+.cxx/
 
 # ----------------------------------------------------------------------------
-# 6. Dependencies & Generated Native Directories
+# 8. Dependencies & Generated Native Folders
 # ----------------------------------------------------------------------------
 node_modules/
 mobile/node_modules/
@@ -93,7 +195,7 @@ mobile/android/
 *.orig.*
 
 # ----------------------------------------------------------------------------
-# 7. Metro, Logs & Debugging
+# 9. Logs & Diagnostics
 # ----------------------------------------------------------------------------
 .metro-health-check*
 *.log
@@ -102,7 +204,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # ----------------------------------------------------------------------------
-# 8. OS & IDE Private Settings
+# 10. OS & IDE Private Settings
 # ----------------------------------------------------------------------------
 .DS_Store
 .DS_Store?
@@ -115,8 +217,13 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.fleet/
+.zed/
 *.swp
 *.swo
+*~
 *.tsbuildinfo
 coverage/
 .system_generated/
+.tempmediaStorage/
+.user_uploaded/

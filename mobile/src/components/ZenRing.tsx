@@ -64,13 +64,22 @@ export const ZenRing: React.FC<ZenRingProps> = ({
   const progressFraction = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
   const strokeDashoffset = circumference * (1 - progressFraction);
 
-  // Time format MM:SS
-  const mins = Math.floor(remainingSeconds / 60);
+  // Time format: HH:MM:SS if hours > 0, else MM:SS
+  const hours = Math.floor(remainingSeconds / 3600);
+  const mins = Math.floor((remainingSeconds % 3600) / 60);
   const secs = remainingSeconds % 60;
-  const formattedTime = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  const formattedTime = hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  const totalHours = Math.floor(totalSeconds / 3600);
+  const totalMins = Math.floor((totalSeconds % 3600) / 60);
+  const goalBadgeLabel = totalHours > 0
+    ? `${totalHours}h${totalMins > 0 ? ` ${totalMins}m` : ''} Focus Goal`
+    : `${Math.max(1, Math.round(totalSeconds / 60))}m Goal`;
 
   const phaseLabel = isRunning
-    ? 'Deep Flow Active'
+    ? (hours > 0 ? 'Deep Marathon Flow' : 'Deep Flow Active')
     : remainingSeconds === 0
     ? 'Session Complete!'
     : remainingSeconds < totalSeconds
@@ -126,7 +135,25 @@ export const ZenRing: React.FC<ZenRingProps> = ({
 
       {/* Center Readout Content */}
       <View style={styles.readout}>
-        <Text style={[styles.timerText, { color: theme.textPrimary }]}>{formattedTime}</Text>
+        {/* Goal Indicator Pill */}
+        <View style={[styles.goalPill, { backgroundColor: isRunning ? 'rgba(99, 102, 241, 0.12)' : theme.surfaceSecondary }]}>
+          <Text style={[styles.goalPillText, { color: isRunning ? Palette.primary : theme.textSecondary }]}>
+            {goalBadgeLabel}
+          </Text>
+        </View>
+
+        <Text
+          style={[
+            styles.timerText,
+            {
+              color: theme.textPrimary,
+              fontSize: hours > 0 ? 38 : 50,
+              letterSpacing: hours > 0 ? -1 : -1.5,
+            },
+          ]}
+        >
+          {formattedTime}
+        </Text>
         <Text
           style={[
             styles.phaseText,
@@ -166,11 +193,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  goalPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radii.full,
+    marginBottom: 4,
+  },
+  goalPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   timerText: {
-    fontSize: 52,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-    letterSpacing: -1.5,
   },
   phaseText: {
     fontSize: 12,

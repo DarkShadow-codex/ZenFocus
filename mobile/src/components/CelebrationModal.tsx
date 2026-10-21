@@ -34,6 +34,12 @@ export const CelebrationModal: React.FC<CelebrationModalProps> = ({
 }) => {
   const theme = Palette[themeMode];
 
+  const completedHours = Math.floor(minutesCompleted / 60);
+  const remainingMins = minutesCompleted % 60;
+  const formattedDuration = completedHours > 0
+    ? `${completedHours} hr${remainingMins > 0 ? ` ${remainingMins} min` : ''} (${minutesCompleted} mins)`
+    : `${minutesCompleted} minutes`;
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -47,12 +53,14 @@ export const CelebrationModal: React.FC<CelebrationModalProps> = ({
               </View>
 
               <Text style={[styles.title, { color: theme.textPrimary }]}>
-                Session Complete!
+                {completedHours > 0 ? 'Multi-Hour Mastery Complete!' : 'Session Complete!'}
               </Text>
 
               <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                Incredible dedication! You stayed in deep flow for{' '}
-                <Text style={{ fontWeight: '700', color: Palette.primary }}>{minutesCompleted} minutes</Text>.
+                {completedHours > 0
+                  ? 'Outstanding achievement! You conquered a deep study block of '
+                  : 'Incredible dedication! You stayed in deep flow for '}
+                <Text style={{ fontWeight: '700', color: Palette.primary }}>{formattedDuration}</Text>.
               </Text>
 
               {/* Streak Badge Box */}

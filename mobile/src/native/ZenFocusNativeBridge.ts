@@ -14,10 +14,12 @@ import {
   AndroidDpcCapabilities,
   IosScreenTimeCapabilities,
   CommandReceipt,
+  ScannedApp,
 } from '../types';
 
 class ZenFocusNativeBridgeService {
   private activePlatformOverride: DevicePlatform | null = null;
+
 
   /**
    * Returns current active enforcement platform ('android' or 'ios')
@@ -111,6 +113,58 @@ class ZenFocusNativeBridgeService {
       reportedAt: timestamp,
     };
   }
+
+  /**
+   * Cross-platform study session focus:
+   * - On Android: Activates DPC DND / WorkManager session
+   * - On iOS: Coordinates ManagedSettings and DeviceActivity
+   */
+  async startStudySession(
+    durationMinutes: number,
+    sessionName: string = 'Focused Study'
+  ): Promise<CommandReceipt> {
+    const platform = this.getActivePlatform();
+    if (platform === 'ios') {
+      return await ZenFocusIos.startStudySession(durationMinutes, sessionName);
+    }
+    return await ZenFocusDpc.startStudySession(durationMinutes, sessionName);
+  }
+
+  /**
+   * Cross-platform study session adjustment (e.g. +15m, +30m, -15m)
+   */
+  async adjustStudySession(deltaMinutes: number): Promise<CommandReceipt> {
+    const platform = this.getActivePlatform();
+    if (platform === 'ios') {
+      return await ZenFocusIos.adjustStudySession(deltaMinutes);
+    }
+    return await ZenFocusDpc.adjustStudySession(deltaMinutes);
+  }
+
+  /**
+   * Cross-platform study session stop
+   */
+  async stopStudySession(): Promise<CommandReceipt> {
+    const platform = this.getActivePlatform();
+    if (platform === 'ios') {
+      return await ZenFocusIos.stopStudySession();
+    }
+    return await ZenFocusDpc.stopStudySession();
+  }
+
+  /**
+   * Cross-platform child device application scanning:
+   * - On Android: Discovers installed packages via PackageManager and queries DPC suspension
+   * - On iOS: Discovers FamilyControls activity selections and queries ManagedSettings shield states
+   */
+  async scanInstalledApps(platformOverride?: DevicePlatform): Promise<ScannedApp[]> {
+    const platform = platformOverride || this.getActivePlatform();
+    if (platform === 'ios') {
+      return await ZenFocusIos.scanInstalledApplications();
+    }
+    return await ZenFocusDpc.scanInstalledApplications();
+  }
 }
 
 export const ZenFocusNative = new ZenFocusNativeBridgeService();
+

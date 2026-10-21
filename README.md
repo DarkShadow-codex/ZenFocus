@@ -56,7 +56,7 @@ ZenFocus enforces restrictions locally through the target device's supported ope
 
 | Feature | Student Focus Hub | Guardian Portal |
 | :--- | :--- | :--- |
-| **Study Timer** | Signature animated SVG Zen Ring with 15m, 25m, 45m, and 60m presets. | Real-time visibility into study streaks and session completion logs. |
+| **Study Timer** | Signature animated SVG Zen Ring with self-set custom study goals &gt; 1 hour (75m, 90m, 120m, 180m+), fine-tuning steppers, and live adjustment controls (+15m, +30m, +1h). Synced with Android DPC and iOS Apple Screen Time. | Real-time visibility into study streaks, multi-hour completion logs, and daily focus totals. |
 | **Role Gating** | Exclusively locked to Student view. No access to parent controls. | Dual-view switcher (`🛡️ Parent Control` ↔ `🧘 Child View`). |
 | **Restrictions** | Self-imposed distraction shields (Discord, Reddit, Roblox). | Authoritative parent-locked app rules and custom package blocks. |
 | **Exception Requests** | One-tap request for 15m–60m temporary access with homework justification. | Real-time approval inbox with instant **Approve (+30m)** and **Reject** buttons. |

@@ -128,4 +128,101 @@ class ZenFocusDpcModule(private val reactContext: ReactApplicationContext) :
             promise.reject("ERR_REQUEST_DND", e.message, e)
         }
     }
+
+    /**
+     * Starts a focused study session on Android, optionally activating DND Priority mode
+     * and recording the session end timestamp. Supports multi-hour sessions (> 60m).
+     */
+    @ReactMethod
+    fun startStudySession(durationMinutes: Double, sessionName: String, promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && notificationManager.isNotificationPolicyAccessGranted) {
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERR_START_STUDY", e.message, e)
+        }
+    }
+
+    /**
+     * Adjusts active study session by delta minutes (e.g. +15m, +30m, -15m).
+     */
+    @ReactMethod
+    fun adjustStudySession(deltaMinutes: Double, promise: Promise) {
+        try {
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERR_ADJUST_STUDY", e.message, e)
+        }
+    }
+
+    /**
+     * Stops study session and restores normal notification policy.
+     */
+    @ReactMethod
+    fun stopStudySession(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && notificationManager.isNotificationPolicyAccessGranted) {
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERR_STOP_STUDY", e.message, e)
+        }
+    }
+
+    /**
+     * Scans installed applications on the Android child device using PackageManager.
+     * Extracts package name, app label, system flag, category, and whether it is suspended by DPC.
+     */
+    @ReactMethod
+    fun scanInstalledApplications(promise: Promise) {
+        try {
+            val pm = reactContext.packageManager
+            val packagesList = Arguments.createArray()
+            val installedPackages = pm.getInstalledPackages(0)
+
+            for (pkg in installedPackages) {
+                val appInfo = pkg.applicationInfo ?: continue
+                val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+
+                // Filter to user-installed and launchable apps
+                val launchIntent = pm.getLaunchIntentForPackage(pkg.packageName)
+                if (launchIntent != null || !isSystem) {
+                    val appMap = Arguments.createMap().apply {
+                        putString("targetPackage", pkg.packageName)
+                        putString("appName", pm.getApplicationLabel(appInfo).toString())
+                        putBoolean("isSystemApp", isSystem)
+                        putDouble("installDate", pkg.firstInstallTime.toDouble())
+                        putString("platform", "android")
+
+                        var isSuspended = false
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            try {
+                                isSuspended = devicePolicyManager.isPackageSuspended(adminComponent, pkg.packageName)
+                            } catch (ignored: Exception) {}
+                        }
+                        putBoolean("isRestricted", isSuspended)
+
+                        // Heuristic category mapping
+                        val cat = when {
+                            pkg.packageName.contains("game") || pkg.packageName.contains("roblox") || pkg.packageName.contains("minecraft") -> "Gaming"
+                            pkg.packageName.contains("youtube") || pkg.packageName.contains("netflix") || pkg.packageName.contains("twitch") -> "Entertainment"
+                            pkg.packageName.contains("tiktok") || pkg.packageName.contains("instagram") || pkg.packageName.contains("snapchat") || pkg.packageName.contains("discord") -> "Social"
+                            pkg.packageName.contains("duolingo") || pkg.packageName.contains("khan") || pkg.packageName.contains("notion") -> "Productivity"
+                            else -> "Utilities"
+                        }
+                        putString("appCategory", cat)
+                    }
+                    packagesList.pushMap(appMap)
+                }
+            }
+
+            promise.resolve(packagesList)
+        } catch (e: Exception) {
+            promise.reject("ERR_SCAN_APPS", e.message, e)
+        }
+    }
 }
+

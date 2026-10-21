@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,9 +75,11 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onRegisterAccount,
           
           {/* Brand Header */}
           <View style={styles.brandHero}>
-            <View style={[styles.heroIconBox, { backgroundColor: Palette.primary }]}>
-              <Ionicons name="infinite" size={32} color="#ffffff" />
-            </View>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.heroLogoImage}
+              resizeMode="contain"
+            />
             <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>ZenFocus</Text>
             <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
               Study Focus & Parental Control Ecosystem
@@ -281,6 +284,16 @@ const styles = StyleSheet.create({
   brandHero: {
     alignItems: 'center',
     marginBottom: 20,
+  },
+  heroLogoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: Radii.lg,
+    marginBottom: 12,
+    shadowColor: Palette.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
   },
   heroIconBox: {
     width: 60,

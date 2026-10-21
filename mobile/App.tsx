@@ -13,6 +13,7 @@ import { HeaderBar } from './src/components/HeaderBar';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { ChildDashboardScreen } from './src/screens/ChildDashboardScreen';
 import { ParentDashboardScreen } from './src/screens/ParentDashboardScreen';
+import { InstaSaveAccountPage } from './src/components/InstaSaveAccountPage';
 import { Palette } from './src/theme';
 
 const MainAppContent: React.FC = () => {
@@ -24,6 +25,8 @@ const MainAppContent: React.FC = () => {
     signOut,
     themeMode,
     toggleTheme,
+    activeParentTab,
+    setActiveParentTab,
   } = useZenFocus();
 
   const theme = Palette[themeMode];
@@ -40,7 +43,7 @@ const MainAppContent: React.FC = () => {
 
   // Once an account exists:
   // - Child account sees ONLY Child Dashboard (Header switcher is hidden)
-  // - Parent account can toggle between Parent Control and Child View
+  // - Parent account can toggle between Control Dashboard, Insta-Save Page, and Child View
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.surface }]}>
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
@@ -48,6 +51,8 @@ const MainAppContent: React.FC = () => {
         account={account}
         activeView={activeView}
         onSwitchView={setActiveView}
+        activeParentTab={activeParentTab}
+        onSwitchParentTab={setActiveParentTab}
         themeMode={themeMode}
         onToggleTheme={toggleTheme}
         onSignOut={signOut}

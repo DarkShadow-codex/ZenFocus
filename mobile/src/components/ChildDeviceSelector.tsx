@@ -31,6 +31,32 @@ export const ChildDeviceSelector: React.FC<ChildDeviceSelectorProps> = ({
   themeMode,
 }) => {
   const theme = Palette[themeMode];
+
+  // If no children are paired yet (e.g. fresh parent account)
+  if (childDevices.length === 0) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: Palette.primaryContainer }]}>
+            <Ionicons name="person-add-outline" size={24} color={Palette.primary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>No Child Paired Yet</Text>
+          <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+            Pair your child's profile to monitor study sessions, enforce rules, and protect focus time.
+          </Text>
+          <TouchableOpacity
+            style={[styles.emptyPairBtn, { backgroundColor: Palette.primary }]}
+            onPress={onPairDevicePress}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add-circle" size={18} color="#ffffff" />
+            <Text style={styles.emptyPairBtnText}>+ Pair Child Device</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   const selectedDevice =
     childDevices.find((d) => d.id === selectedChildDeviceId) || childDevices[0];
 
@@ -40,8 +66,8 @@ export const ChildDeviceSelector: React.FC<ChildDeviceSelectorProps> = ({
       <View style={styles.headerRow}>
         <View style={styles.titleCol}>
           <View style={styles.titleBadgeRow}>
-            <Ionicons name="hardware-chip-outline" size={17} color={Palette.primary} />
-            <Text style={[styles.title, { color: theme.textPrimary }]}>Paired Child Devices</Text>
+            <Ionicons name="people-outline" size={17} color={Palette.primary} />
+            <Text style={[styles.title, { color: theme.textPrimary }]}>Paired Children</Text>
             <View style={[styles.countBadge, { backgroundColor: Palette.primaryContainer }]}>
               <Text style={[styles.countText, { color: Palette.primary }]}>
                 {childDevices.length} Connected
@@ -49,7 +75,7 @@ export const ChildDeviceSelector: React.FC<ChildDeviceSelectorProps> = ({
             </View>
           </View>
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Viewing: <Text style={{ fontWeight: '700', color: theme.textPrimary }}>{selectedDevice.childName}</Text> ({selectedDevice.deviceName} • {selectedDevice.platform === 'ios' ? 'Apple iOS' : 'Android DPC'})
+            Viewing: <Text style={{ fontWeight: '700', color: theme.textPrimary }}>{selectedDevice.childName}</Text> ({selectedDevice.platform === 'ios' ? 'Apple iOS' : 'Android DPC'})
           </Text>
         </View>
 
@@ -110,12 +136,12 @@ export const ChildDeviceSelector: React.FC<ChildDeviceSelectorProps> = ({
                 </View>
               </View>
 
-              {/* Child & Device Name */}
+              {/* Child Name & Platform (No hardware model) */}
               <Text style={[styles.childName, { color: theme.textPrimary }]} numberOfLines={1}>
                 {device.childName}
               </Text>
               <Text style={[styles.deviceModel, { color: theme.textSecondary }]} numberOfLines={1}>
-                {device.deviceName}
+                {device.platform === 'ios' ? 'Apple iOS' : 'Android DPC'}
               </Text>
 
               {/* Status footer: Battery & Restrictions */}
@@ -153,9 +179,9 @@ export const ChildDeviceSelector: React.FC<ChildDeviceSelectorProps> = ({
           <View style={[styles.addIconCircle, { backgroundColor: Palette.primaryContainer }]}>
             <Ionicons name="person-add-outline" size={20} color={Palette.primary} />
           </View>
-          <Text style={[styles.addCardTitle, { color: theme.textPrimary }]}>Pair Child 6+</Text>
+          <Text style={[styles.addCardTitle, { color: theme.textPrimary }]}>+ Pair Child</Text>
           <Text style={[styles.addCardSubtitle, { color: theme.textSecondary }]}>
-            Connect another Android or iOS device
+            Connect another child profile
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -327,5 +353,44 @@ const styles = StyleSheet.create({
   addCardSubtitle: {
     fontSize: 10,
     textAlign: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+  },
+  emptyIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: Radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 14,
+    maxWidth: 280,
+  },
+  emptyPairBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: Radii.full,
+  },
+  emptyPairBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

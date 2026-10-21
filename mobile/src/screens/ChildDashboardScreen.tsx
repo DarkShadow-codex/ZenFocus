@@ -165,7 +165,7 @@ export const ChildDashboardScreen: React.FC = () => {
         capabilities={capabilities}
         themeMode={themeMode}
         activePlatform={account?.role === 'CHILD' ? (Platform.OS === 'ios' ? 'ios' : 'android') : selectedChildDevice.platform}
-        deviceName={`${account?.role === 'CHILD' ? account.name : selectedChildDevice.childName}'s ${selectedChildDevice.deviceName}`}
+        deviceName={account?.role === 'CHILD' ? account.name : selectedChildDevice.childName}
       />
 
       {/* Main Zen Ring Card */}

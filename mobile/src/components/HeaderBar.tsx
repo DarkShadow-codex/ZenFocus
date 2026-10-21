@@ -225,57 +225,62 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               />
             </View>
 
-            {/* Quick Option 2: Switch Paired Devices (Parent Only) */}
+            {/* Quick Option 2: Switch Paired Children (Parent Only) */}
             {isParent && (
               <>
                 <View style={[styles.menuDivider, { backgroundColor: theme.surfaceBorderSubtle }]} />
-                <View style={styles.deviceSectionHeader}>
-                  <Text style={[styles.deviceSectionTitle, { color: theme.textMuted }]}>
-                    SWITCH PAIRED DEVICE ({childDevices.length})
-                  </Text>
-                </View>
-                {childDevices.slice(0, 5).map((device) => {
-                  const isSelected = device.id === selectedChildDeviceId;
-                  const isIos = device.platform === 'ios';
-                  return (
-                    <TouchableOpacity
-                      key={device.id}
-                      style={[
-                        styles.devicePickerRow,
-                        isSelected && { backgroundColor: isIos ? 'rgba(0, 122, 255, 0.08)' : 'rgba(81, 70, 229, 0.08)' },
-                      ]}
-                      onPress={() => {
-                        selectChildDevice(device.id);
-                        setMenuVisible(false);
-                      }}
-                    >
-                      <Ionicons
-                        name={isIos ? 'logo-apple' : 'logo-android'}
-                        size={15}
-                        color={isIos ? '#007aff' : '#35b98a'}
-                      />
-                      <Text
+                {childDevices.length > 0 && (
+                  <View style={styles.deviceSectionHeader}>
+                    <Text style={[styles.deviceSectionTitle, { color: theme.textMuted }]}>
+                      SWITCH PAIRED CHILD ({childDevices.length})
+                    </Text>
+                  </View>
+                )}
+
+                {childDevices.length > 0 &&
+                  childDevices.slice(0, 8).map((device) => {
+                    const isSelected = device.id === selectedChildDeviceId;
+                    const isIos = device.platform === 'ios';
+                    return (
+                      <TouchableOpacity
+                        key={device.id}
                         style={[
-                          styles.devicePickerName,
-                          {
-                            color: isSelected ? (isIos ? '#007aff' : Palette.primary) : theme.textPrimary,
-                            fontWeight: isSelected ? '700' : '500',
-                          },
+                          styles.devicePickerRow,
+                          isSelected && { backgroundColor: isIos ? 'rgba(0, 122, 255, 0.08)' : 'rgba(81, 70, 229, 0.08)' },
                         ]}
-                        numberOfLines={1}
+                        onPress={() => {
+                          selectChildDevice(device.id);
+                          setMenuVisible(false);
+                        }}
                       >
-                        {device.childName} ({device.deviceName})
-                      </Text>
-                      {isSelected && (
                         <Ionicons
-                          name="checkmark-circle"
-                          size={16}
-                          color={isIos ? '#007aff' : Palette.primary}
+                          name={isIos ? 'logo-apple' : 'logo-android'}
+                          size={15}
+                          color={isIos ? '#007aff' : '#35b98a'}
                         />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.devicePickerName,
+                            {
+                              color: isSelected ? (isIos ? '#007aff' : Palette.primary) : theme.textPrimary,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {device.childName}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={16}
+                            color={isIos ? '#007aff' : Palette.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                }
 
                 <TouchableOpacity
                   style={styles.pairNewRow}
@@ -488,6 +493,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
+  },
+  emptyChildNotice: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  emptyChildText: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   devicePickerRow: {
     flexDirection: 'row',

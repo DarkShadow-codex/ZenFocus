@@ -181,57 +181,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Section 3: Paired Family Devices (Parent Only) */}
           {isParent && (
             <>
-              <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>PAIRED CHILD DEVICES ({childDevices.length})</Text>
+              <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>PAIRED CHILDREN ({childDevices.length})</Text>
               <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
-                <Text style={[styles.subcardNote, { color: theme.textSecondary }]}>
-                  Tap any device to switch active control:
-                </Text>
+                {childDevices.length > 0 ? (
+                  <>
+                    <Text style={[styles.subcardNote, { color: theme.textSecondary }]}>
+                      Tap any child to switch active control:
+                    </Text>
 
-                {childDevices.map((device) => {
-                  const isSelected = device.id === selectedChildDeviceId;
-                  const isIos = device.platform === 'ios';
+                    {childDevices.map((device) => {
+                      const isSelected = device.id === selectedChildDeviceId;
+                      const isIos = device.platform === 'ios';
 
-                  return (
-                    <TouchableOpacity
-                      key={device.id}
-                      style={[
-                        styles.deviceListItem,
-                        {
-                          backgroundColor: isSelected ? (isIos ? 'rgba(0, 122, 255, 0.08)' : 'rgba(81, 70, 229, 0.08)') : theme.surfaceSecondary,
-                          borderColor: isSelected ? (isIos ? '#007aff' : Palette.primary) : theme.surfaceBorderSubtle,
-                        },
-                      ]}
-                      onPress={() => {
-                        onSelectChildDevice(device.id);
-                        showToast(`Switched active control to ${device.childName}'s ${device.deviceName}`);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.deviceItemLeft}>
-                        <View style={[styles.platformDotBox, { backgroundColor: isIos ? '#007aff' : '#35b98a' }]}>
-                          <Ionicons name={isIos ? 'logo-apple' : 'logo-android'} size={14} color="#ffffff" />
-                        </View>
-                        <View>
-                          <Text style={[styles.deviceItemName, { color: theme.textPrimary }]}>
-                            {device.childName} • {device.deviceName}
-                          </Text>
-                          <Text style={[styles.deviceItemPlatform, { color: theme.textSecondary }]}>
-                            {isIos ? 'Apple Screen Time (FamilyControls)' : 'Android DPC (Device Owner)'}
-                          </Text>
-                        </View>
-                      </View>
+                      return (
+                        <TouchableOpacity
+                          key={device.id}
+                          style={[
+                            styles.deviceListItem,
+                            {
+                              backgroundColor: isSelected ? (isIos ? 'rgba(0, 122, 255, 0.08)' : 'rgba(81, 70, 229, 0.08)') : theme.surfaceSecondary,
+                              borderColor: isSelected ? (isIos ? '#007aff' : Palette.primary) : theme.surfaceBorderSubtle,
+                            },
+                          ]}
+                          onPress={() => {
+                            onSelectChildDevice(device.id);
+                            showToast(`Switched active control to ${device.childName}`);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.deviceItemLeft}>
+                            <View style={[styles.platformDotBox, { backgroundColor: isIos ? '#007aff' : '#35b98a' }]}>
+                              <Ionicons name={isIos ? 'logo-apple' : 'logo-android'} size={14} color="#ffffff" />
+                            </View>
+                            <View>
+                              <Text style={[styles.deviceItemName, { color: theme.textPrimary }]}>
+                                {device.childName}
+                              </Text>
+                              <Text style={[styles.deviceItemPlatform, { color: theme.textSecondary }]}>
+                                {isIos ? 'Apple iOS' : 'Android DPC'}
+                              </Text>
+                            </View>
+                          </View>
 
-                      {isSelected ? (
-                        <View style={[styles.selectedPill, { backgroundColor: isIos ? '#007aff' : Palette.primary }]}>
-                          <Ionicons name="checkmark" size={12} color="#ffffff" />
-                          <Text style={styles.selectedPillText}>Active</Text>
-                        </View>
-                      ) : (
-                        <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                          {isSelected ? (
+                            <View style={[styles.selectedPill, { backgroundColor: isIos ? '#007aff' : Palette.primary }]}>
+                              <Ionicons name="checkmark" size={12} color="#ffffff" />
+                              <Text style={styles.selectedPillText}>Active</Text>
+                            </View>
+                          ) : (
+                            <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <Text style={[styles.subcardNote, { color: theme.textSecondary, marginBottom: 8 }]}>
+                    No children paired yet. Pair your first child below:
+                  </Text>
+                )}
 
                 {onOpenPairingModal && (
                   <TouchableOpacity
@@ -242,7 +250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                   >
                     <Ionicons name="add-circle" size={18} color={Palette.primary} />
-                    <Text style={[styles.addDeviceButtonText, { color: Palette.primary }]}>+ Pair Another Device</Text>
+                    <Text style={[styles.addDeviceButtonText, { color: Palette.primary }]}>+ Pair Child Device</Text>
                   </TouchableOpacity>
                 )}
               </View>

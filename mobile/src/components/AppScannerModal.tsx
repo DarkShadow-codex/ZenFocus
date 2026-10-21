@@ -161,7 +161,7 @@ export const AppScannerModal: React.FC<AppScannerModalProps> = ({
                   </View>
                 </View>
                 <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                  {childDevice?.deviceName} • {childDevice?.osVersion}
+                  {childDevice?.platform === 'ios' ? 'Apple iOS' : 'Android DPC'} • {childDevice?.osVersion}
                 </Text>
               </View>
               <TouchableOpacity

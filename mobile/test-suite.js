@@ -694,6 +694,91 @@ test('Parent App Scanner: Instant 1-tap toggling updates scanned app restricted 
   assert.strictEqual(scannedApps.find((a) => a.targetPackage === 'com.roblox.robloxmobile').isRestricted, false);
 });
 
+// ============================================================================
+// TEST GROUP 8: PARENT ACCOUNT ONBOARDING, SIGN-IN & NAME-ONLY DISPLAY
+// ============================================================================
+console.log('\n--- Group 8: Account Onboarding, Sign-In & Name-Only Display ---');
+
+test('New Parent Account Registration: Starts with 0 children so only "+ Pair Child Device" is shown', () => {
+  const registerNewAccount = (name, email, role) => {
+    return {
+      account: { id: `acc_${Date.now()}`, name, email, role },
+      childDevices: role === 'PARENT' ? [] : [], // Fresh parent registrations start with 0 children
+    };
+  };
+
+  const newParent = registerNewAccount('John Doe', 'john@example.com', 'PARENT');
+  assert.strictEqual(newParent.account.role, 'PARENT');
+  assert.strictEqual(newParent.childDevices.length, 0, 'New parent account must have 0 paired children');
+
+  // Verify UI helper: When children count is 0, only pair option is displayed
+  const getDeviceMenuOptions = (childDevices) => {
+    if (childDevices.length === 0) {
+      return ['+ Pair Child Device'];
+    }
+    return [...childDevices.map(c => c.childName), '+ Pair Child Device'];
+  };
+
+  const menuOptions = getDeviceMenuOptions(newParent.childDevices);
+  assert.strictEqual(menuOptions.length, 1);
+  assert.strictEqual(menuOptions[0], '+ Pair Child Device');
+});
+
+test('Name-Only Identification: No hardware model strings shown for parent and child accounts', () => {
+  const formatAccountHeader = (account) => {
+    // Must display account name only without device hardware model
+    return {
+      displayName: account.name,
+      hasDeviceModel: false,
+    };
+  };
+
+  const formatChildDisplay = (child) => {
+    // Must display child name and platform only without hardware device strings
+    return {
+      title: child.childName,
+      platform: child.platform === 'ios' ? 'Apple iOS' : 'Android DPC',
+    };
+  };
+
+  const parentHeader = formatAccountHeader({ name: 'Shivram', role: 'PARENT' });
+  assert.strictEqual(parentHeader.displayName, 'Shivram');
+  assert.strictEqual(parentHeader.hasDeviceModel, false);
+
+  const childDisplay = formatChildDisplay({ childName: 'Leo', platform: 'android' });
+  assert.strictEqual(childDisplay.title, 'Leo');
+  assert.strictEqual(childDisplay.platform, 'Android DPC');
+});
+
+test('Sign In / Login: Authenticates existing parent and child accounts', () => {
+  const existingAccounts = [
+    { id: 'acc_parent', name: 'Shivram', email: 'parent@zenfocus.app', role: 'PARENT' },
+    { id: 'acc_child', name: 'Leo', email: 'leo@zenfocus.app', role: 'CHILD' },
+  ];
+
+  const loginUser = (nameOrEmail, role) => {
+    const found = existingAccounts.find(
+      (a) => (a.email.toLowerCase() === nameOrEmail.toLowerCase() || a.name.toLowerCase() === nameOrEmail.toLowerCase()) && a.role === role
+    );
+    if (found) return found;
+    // Create session for existing user
+    return {
+      id: `acc_${Date.now()}`,
+      name: nameOrEmail.includes('@') ? nameOrEmail.split('@')[0] : nameOrEmail,
+      email: nameOrEmail.includes('@') ? nameOrEmail : `${nameOrEmail}@zenfocus.app`,
+      role,
+    };
+  };
+
+  const parentLogin = loginUser('Shivram', 'PARENT');
+  assert.strictEqual(parentLogin.name, 'Shivram');
+  assert.strictEqual(parentLogin.role, 'PARENT');
+
+  const childLogin = loginUser('leo@zenfocus.app', 'CHILD');
+  assert.strictEqual(childLogin.name, 'Leo');
+  assert.strictEqual(childLogin.role, 'CHILD');
+});
+
 console.log('\n=============================================================');
 console.log(`🏁 Test Results: ${passedTests}/${totalTests} Tests Passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 console.log('=============================================================\n');

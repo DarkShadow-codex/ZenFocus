@@ -252,7 +252,6 @@ export const InstaSaveAccountPage: React.FC = () => {
   // Pair New Device Modal state
   const [pairNewDeviceModalOpen, setPairNewDeviceModalOpen] = useState(false);
   const [newChildName, setNewChildName] = useState('');
-  const [newDeviceName, setNewDeviceName] = useState('');
   const [newDevicePlatform, setNewDevicePlatform] = useState<DevicePlatform>('android');
 
   const isIos = selectedChildDevice.platform === 'ios';
@@ -295,7 +294,7 @@ export const InstaSaveAccountPage: React.FC = () => {
 
     // Flash the Insta-Save Banner
     const toastState = {
-      text: `⚡ Insta-Saved to ${selectedChildDevice.childName}'s ${selectedChildDevice.deviceName}`,
+      text: `⚡ Insta-Saved for ${selectedChildDevice.childName}`,
       subtext: nextActive
         ? `Blocked ${item.appName} • ${isIos ? 'Apple Screen Time Shield Active' : 'Android DPC Package Suspended'}`
         : `Allowed ${item.appName} • Restriction lifted immediately`,
@@ -322,7 +321,7 @@ export const InstaSaveAccountPage: React.FC = () => {
     );
 
     setInstaSaveToast({
-      text: `⚡ Insta-Saved to ${selectedChildDevice.childName}'s device`,
+      text: `⚡ Insta-Saved for ${selectedChildDevice.childName}`,
       subtext: `Custom app ${customAppName} blocked and synced`,
       appName: customAppName,
       blocked: true,
@@ -333,16 +332,15 @@ export const InstaSaveAccountPage: React.FC = () => {
   };
 
   const handlePairNewDeviceSubmit = () => {
-    if (!newChildName.trim() || !newDeviceName.trim()) return;
-    const paired = pairNewChildDevice(newChildName.trim(), newDeviceName.trim(), newDevicePlatform);
+    if (!newChildName.trim()) return;
+    const paired = pairNewChildDevice(newChildName.trim(), newDevicePlatform);
     selectChildDevice(paired.id);
     setPairNewDeviceModalOpen(false);
     setNewChildName('');
-    setNewDeviceName('');
     setInstaSaveToast({
-      text: `🎉 Paired New Device for ${paired.childName}!`,
-      subtext: `${paired.deviceName} (${paired.platform.toUpperCase()}) added to your parent account.`,
-      appName: paired.deviceName,
+      text: `🎉 Paired New Child: ${paired.childName}!`,
+      subtext: `${paired.platform === 'ios' ? 'Apple iOS' : 'Android DPC'} added to your parent account.`,
+      appName: paired.childName,
       blocked: false,
     });
   };
@@ -447,7 +445,7 @@ export const InstaSaveAccountPage: React.FC = () => {
               Controlling Device Restrictions
             </Text>
             <Text style={[styles.controllingName, { color: theme.textPrimary }]}>
-              {selectedChildDevice.childName} • {selectedChildDevice.deviceName}
+              {selectedChildDevice.childName}
             </Text>
             <Text style={[styles.controllingSub, { color: theme.textSecondary }]}>
               {isIos ? 'Apple Screen Time & FamilyControls Engine' : 'Android DPC Device Policy Controller (Device Owner)'}
@@ -630,7 +628,7 @@ export const InstaSaveAccountPage: React.FC = () => {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-              Target Device: {selectedChildDevice.childName} ({selectedChildDevice.deviceName})
+              Target: {selectedChildDevice.childName} ({selectedChildDevice.platform === 'ios' ? 'Apple iOS' : 'Android DPC'})
             </Text>
 
             <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>App Name</Text>
@@ -672,13 +670,13 @@ export const InstaSaveAccountPage: React.FC = () => {
         </View>
       </Modal>
 
-      {/* Pair New Device Modal */}
+      {/* Pair New Child Modal */}
       <Modal visible={pairNewDeviceModalOpen} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
-                Pair New Child Device
+                Pair New Child Profile
               </Text>
               <TouchableOpacity onPress={() => setPairNewDeviceModalOpen(false)}>
                 <Ionicons name="close" size={20} color={theme.textSecondary} />
@@ -686,7 +684,7 @@ export const InstaSaveAccountPage: React.FC = () => {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-              Add device 6+ to your parent account. Both Android and iOS are supported.
+              Add another child account to your parent portal. Both Android and iOS are supported.
             </Text>
 
             <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>Child's Name</Text>
@@ -698,16 +696,7 @@ export const InstaSaveAccountPage: React.FC = () => {
               onChangeText={setNewChildName}
             />
 
-            <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>Device Model</Text>
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: theme.surfaceSecondary, color: theme.textPrimary, borderColor: theme.surfaceBorder }]}
-              placeholder="e.g. Pixel 7, iPhone 14, iPad Mini"
-              placeholderTextColor={theme.textMuted}
-              value={newDeviceName}
-              onChangeText={setNewDeviceName}
-            />
-
-            <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>Device Platform</Text>
+            <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>Platform</Text>
             <View style={styles.platformPickRow}>
               <TouchableOpacity
                 style={[

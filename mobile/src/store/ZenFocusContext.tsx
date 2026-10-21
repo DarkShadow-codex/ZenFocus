@@ -79,7 +79,7 @@ export const DEFAULT_CHILD_DEVICES: ChildDevice[] = [
   {
     id: 'dev_leo_s24',
     childName: 'Leo',
-    deviceName: 'Samsung Galaxy S24',
+    deviceName: '',
     platform: 'android',
     pairingCode: 'ZEN-8942',
     isOnline: true,
@@ -92,7 +92,7 @@ export const DEFAULT_CHILD_DEVICES: ChildDevice[] = [
   {
     id: 'dev_maya_iphone15',
     childName: 'Maya',
-    deviceName: 'iPhone 15 Pro',
+    deviceName: '',
     platform: 'ios',
     pairingCode: 'ZEN-3190',
     isOnline: true,
@@ -105,7 +105,7 @@ export const DEFAULT_CHILD_DEVICES: ChildDevice[] = [
   {
     id: 'dev_sam_pixel8',
     childName: 'Sam',
-    deviceName: 'Google Pixel 8',
+    deviceName: '',
     platform: 'android',
     pairingCode: 'ZEN-5512',
     isOnline: true,
@@ -118,7 +118,7 @@ export const DEFAULT_CHILD_DEVICES: ChildDevice[] = [
   {
     id: 'dev_chloe_ipad',
     childName: 'Chloe',
-    deviceName: 'iPad Air M2',
+    deviceName: '',
     platform: 'ios',
     pairingCode: 'ZEN-7734',
     isOnline: true,
@@ -131,7 +131,7 @@ export const DEFAULT_CHILD_DEVICES: ChildDevice[] = [
   {
     id: 'dev_ethan_tab',
     childName: 'Ethan',
-    deviceName: 'Galaxy Tab S9',
+    deviceName: '',
     platform: 'android',
     pairingCode: 'ZEN-9021',
     isOnline: true,
@@ -370,6 +370,7 @@ interface ZenFocusContextType {
   activeView: 'CHILD' | 'PARENT';
   setActiveView: (view: 'CHILD' | 'PARENT') => void;
   registerAccount: (name: string, email: string, role: UserRole, pairingCode?: string) => Promise<void>;
+  loginAccount: (nameOrEmail: string, role: UserRole, customName?: string) => Promise<void>;
   signOut: () => Promise<void>;
   themeMode: 'light' | 'dark';
   toggleTheme: () => void;
@@ -398,12 +399,12 @@ interface ZenFocusContextType {
   takeBreak: (minutes?: number) => void;
   recordCompletedSession: (durationMinutes: number, sessionType?: string) => void;
 
-  // Multi-child device management (At least 5 devices support)
+  // Multi-child management (By child's name, no device names)
   childDevices: ChildDevice[];
   selectedChildDeviceId: string;
   selectedChildDevice: ChildDevice;
   selectChildDevice: (deviceId: string) => void;
-  pairNewChildDevice: (childName: string, deviceName: string, platform: DevicePlatform) => ChildDevice;
+  pairNewChildDevice: (childName: string, deviceNameOrPlatform?: string, platform?: DevicePlatform) => ChildDevice;
   removeChildDevice: (deviceId: string) => void;
   toggleAppRestrictionForChild: (
     childDeviceId: string,
@@ -468,7 +469,7 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       actor: 'Apple ScreenTime',
       actorRole: 'PARENT',
       eventType: 'POLICY_APPLIED',
-      description: 'Maya iPhone 15 Pro FamilyControls authorization verified.',
+      description: 'Maya (iOS) FamilyControls authorization verified.',
     },
   ]);
 
@@ -516,7 +517,20 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   });
 
   const selectedChildDevice: ChildDevice =
-    childDevices.find((d) => d.id === selectedChildDeviceId) || childDevices[0];
+    childDevices.find((d) => d.id === selectedChildDeviceId) ||
+    childDevices[0] || {
+      id: 'dev_none',
+      childName: 'No Child Paired',
+      deviceName: '',
+      platform: 'android',
+      pairingCode: 'ZEN-0000',
+      isOnline: false,
+      batteryLevel: 0,
+      lastSyncAt: new Date().toISOString(),
+      appVersion: '1.0.0',
+      osVersion: 'Android',
+      activeRestrictionsCount: 0,
+    };
 
   const setActivePlatform = (platform: DevicePlatform) => {
     setActivePlatformState(platform);
@@ -532,11 +546,21 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     AsyncStorage.setItem('zenfocus_selected_child_id', deviceId).catch(console.error);
   };
 
-  const pairNewChildDevice = (childName: string, deviceName: string, platform: DevicePlatform): ChildDevice => {
+  const pairNewChildDevice = (
+    childName: string,
+    deviceNameOrPlatform?: string,
+    platformArg?: DevicePlatform
+  ): ChildDevice => {
+    let platform: DevicePlatform = 'android';
+    if (platformArg) {
+      platform = platformArg;
+    } else if (deviceNameOrPlatform === 'ios' || deviceNameOrPlatform === 'android') {
+      platform = deviceNameOrPlatform;
+    }
     const newDevice: ChildDevice = {
       id: `dev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      childName,
-      deviceName,
+      childName: childName.trim(),
+      deviceName: '',
       platform,
       pairingCode: `ZEN-${Math.floor(1000 + Math.random() * 9000)}`,
       isOnline: true,
@@ -548,7 +572,10 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
     const updated = [...childDevices, newDevice];
     setChildDevices(updated);
+    setSelectedChildDeviceId(newDevice.id);
+    setActivePlatform(newDevice.platform);
     AsyncStorage.setItem('zenfocus_child_devices', JSON.stringify(updated)).catch(console.error);
+    AsyncStorage.setItem('zenfocus_selected_child_id', newDevice.id).catch(console.error);
 
     const auditItem: AuditEvent = {
       id: `aud_${Date.now()}`,
@@ -556,8 +583,8 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       actor: 'Parent Account',
       actorRole: 'PARENT',
       eventType: 'DPC_ENROLLED',
-      description: `Paired new child device: ${childName} (${deviceName} - ${platform.toUpperCase()}) successfully.`,
-      safeDiagnostic: `Device paired with PIN ${newDevice.pairingCode}. Total paired devices: ${updated.length}`,
+      description: `Paired new child: ${childName} (${platform.toUpperCase()}) successfully.`,
+      safeDiagnostic: `Child paired with PIN ${newDevice.pairingCode}. Total paired children: ${updated.length}`,
     };
     setAuditEvents((prev) => [auditItem, ...prev]);
     return newDevice;
@@ -673,7 +700,7 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       actor: 'Parent Account',
       actorRole: 'PARENT',
       eventType: active ? 'POLICY_APPLIED' : 'POLICY_REMOVED',
-      description: `⚡ Insta-Saved: ${appName} (${targetPackage}) set to ${active ? 'BLOCKED' : 'ALLOWED'} on ${childName}'s ${deviceName}.`,
+      description: `⚡ Insta-Saved: ${appName} (${targetPackage}) set to ${active ? 'BLOCKED' : 'ALLOWED'} for ${childName}.`,
       safeDiagnostic: receipt.safeDiagnostic || (platform === 'ios' ? 'Screen Time shield applied' : 'DPC package suspended'),
     };
     setAuditEvents((prev) => [auditItem, ...prev]);
@@ -749,7 +776,7 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         actor: 'App Scanner',
         actorRole: 'PARENT',
         eventType: 'DPC_ENROLLED',
-        description: `Scanned ${correlated.length} apps on ${childName}'s ${deviceName} (${platform.toUpperCase()}). ${scanResult.newlyDiscoveredCount} newly discovered.`,
+        description: `Scanned ${correlated.length} apps for ${childName} (${platform.toUpperCase()}). ${scanResult.newlyDiscoveredCount} newly discovered.`,
         safeDiagnostic: `Platform scan completed via ${platform === 'ios' ? 'Apple FamilyControls / Screen Time' : 'Android PackageManager / DPC'}.`,
       };
       setAuditEvents((prev) => [auditItem, ...prev]);
@@ -880,11 +907,48 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
     setAccount(newAccount);
     setActiveViewState(role === 'PARENT' ? 'PARENT' : 'CHILD');
-    if (role === 'CHILD') {
+    if (role === 'PARENT') {
+      // New parent account starts with zero child devices so only "+ Pair Child Device" is shown!
+      setChildDevices([]);
+      setSelectedChildDeviceId('');
+      await AsyncStorage.setItem('zenfocus_child_devices', JSON.stringify([]));
+      await AsyncStorage.removeItem('zenfocus_selected_child_id');
+    } else {
       // On child account: strictly enforce host device platform
       setActivePlatform(Platform.OS === 'ios' ? 'ios' : 'android');
     }
     await AsyncStorage.setItem('zenfocus_user_account', JSON.stringify(newAccount));
+  };
+
+  const loginAccount = async (nameOrEmail: string, role: UserRole, customName?: string) => {
+    const rawName = customName || (nameOrEmail.includes('@') ? nameOrEmail.split('@')[0] : nameOrEmail);
+    const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+    const loggedInAccount: UserAccount = {
+      id: `usr_${Date.now()}`,
+      name: formattedName,
+      email: nameOrEmail,
+      role,
+      createdAt: new Date().toISOString(),
+    };
+    setAccount(loggedInAccount);
+    setActiveViewState(role === 'PARENT' ? 'PARENT' : 'CHILD');
+
+    if (role === 'PARENT') {
+      const savedDevicesStr = await AsyncStorage.getItem('zenfocus_child_devices');
+      if (savedDevicesStr) {
+        try {
+          const parsed = JSON.parse(savedDevicesStr) as ChildDevice[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChildDevices(parsed);
+            setSelectedChildDeviceId(parsed[0].id);
+            setActivePlatform(parsed[0].platform);
+          }
+        } catch (_) {}
+      }
+    } else {
+      setActivePlatform(Platform.OS === 'ios' ? 'ios' : 'android');
+    }
+    await AsyncStorage.setItem('zenfocus_user_account', JSON.stringify(loggedInAccount));
   };
 
   const signOut = async () => {
@@ -1187,6 +1251,7 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         activeView,
         setActiveView,
         registerAccount,
+        loginAccount,
         signOut,
         themeMode,
         toggleTheme,

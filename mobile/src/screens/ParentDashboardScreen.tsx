@@ -286,7 +286,7 @@ export const ParentDashboardScreen: React.FC = () => {
       <View style={styles.sectionHeader}>
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-            App Restrictions ({selectedChildDevice.childName}'s {selectedChildDevice.deviceName})
+            App Restrictions ({selectedChildDevice.childName})
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <TouchableOpacity

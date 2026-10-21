@@ -27,7 +27,7 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
   const theme = Palette[themeMode];
   const isIos = activePlatform === 'ios' || capabilities.platform === 'ios';
 
-  const defaultTitle = isIos ? 'iPhone 15 Pro (Apple Screen Time)' : 'Galaxy S24 (Android DPC)';
+  const defaultTitle = isIos ? 'Apple Screen Time' : 'Android DPC Focus';
   const displayDeviceName = deviceName || defaultTitle;
 
   return (

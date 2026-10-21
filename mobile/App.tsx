@@ -22,6 +22,7 @@ const MainAppContent: React.FC = () => {
     activeView,
     setActiveView,
     registerAccount,
+    loginAccount,
     signOut,
     themeMode,
     toggleTheme,
@@ -36,7 +37,11 @@ const MainAppContent: React.FC = () => {
     return (
       <>
         <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
-        <WelcomeScreen onRegisterAccount={registerAccount} themeMode={themeMode} />
+        <WelcomeScreen
+          onRegisterAccount={registerAccount}
+          onLoginAccount={loginAccount}
+          themeMode={themeMode}
+        />
       </>
     );
   }

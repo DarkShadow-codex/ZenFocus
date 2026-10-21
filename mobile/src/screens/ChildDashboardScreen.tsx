@@ -52,6 +52,13 @@ export const ChildDashboardScreen: React.FC = () => {
     setActivePlatform,
     account,
     selectedChildDevice,
+    isAccessibilityEnabled,
+    checkAccessibilityPermission,
+    openAccessibilitySettings,
+    isBatteryOptimizationIgnored,
+    checkBatteryOptimizationStatus,
+    requestIgnoreBatteryOptimizations,
+    startBackgroundProtection,
   } = useZenFocus();
 
   const theme = Palette[themeMode];
@@ -167,6 +174,79 @@ export const ChildDashboardScreen: React.FC = () => {
         activePlatform={account?.role === 'CHILD' ? (Platform.OS === 'ios' ? 'ios' : 'android') : selectedChildDevice.platform}
         deviceName={account?.role === 'CHILD' ? account.name : selectedChildDevice.childName}
       />
+
+      {/* Android Real-Time App Blocker & Suspension Shield Banner */}
+      {Platform.OS === 'android' && !isAccessibilityEnabled && (
+        <View style={[styles.a11yBanner, { backgroundColor: '#1c1a12', borderColor: '#f59e0b' }]}>
+          <View style={styles.a11yBannerLeft}>
+            <View style={styles.a11yIconCircle}>
+              <Ionicons name="shield-half" size={20} color="#f59e0b" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.a11yBannerTitle, { color: '#fbbf24' }]}>
+                Real-Time App Suspension Shield
+              </Text>
+              <Text style={[styles.a11yBannerDesc, { color: '#d1d5db' }]}>
+                Enable ZenFocus in Android Accessibility Settings so restricted apps automatically suspend and close when opened.
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.a11yBtn}
+            onPress={async () => {
+              await openAccessibilitySettings();
+              setTimeout(() => {
+                checkAccessibilityPermission();
+              }, 2000);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.a11yBtnText}>Enable Shield</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Android Background Execution / Battery Optimization Banner */}
+      {Platform.OS === 'android' && !isBatteryOptimizationIgnored && (
+        <View style={[styles.a11yBanner, { backgroundColor: '#111827', borderColor: '#6366f1' }]}>
+          <View style={styles.a11yBannerLeft}>
+            <View style={[styles.a11yIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.18)' }]}>
+              <Ionicons name="battery-charging-outline" size={20} color="#818cf8" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.a11yBannerTitle, { color: '#818cf8' }]}>
+                Enable Background Running
+              </Text>
+              <Text style={[styles.a11yBannerDesc, { color: '#d1d5db' }]}>
+                Allow ZenFocus to run unrestricted in the background so focus timers and app blocking never stop when the phone is locked or screen is off.
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.a11yBtn, { backgroundColor: '#6366f1' }]}
+            onPress={async () => {
+              await requestIgnoreBatteryOptimizations();
+              await startBackgroundProtection();
+              setTimeout(() => {
+                checkBatteryOptimizationStatus();
+              }, 2000);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.a11yBtnText, { color: '#ffffff' }]}>Allow Background Running</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Background Protection Active Indicator */}
+      {Platform.OS === 'android' && isAccessibilityEnabled && isBatteryOptimizationIgnored && (
+        <View style={styles.activeProtectionBar}>
+          <Ionicons name="shield-checkmark" size={15} color="#10b981" />
+          <Text style={styles.activeProtectionText}>
+            24/7 Background Shield Active • Protection Running
+          </Text>
+        </View>
+      )}
 
       {/* Main Zen Ring Card */}
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
@@ -543,6 +623,7 @@ export const ChildDashboardScreen: React.FC = () => {
         visible={scannerVisible}
         onClose={() => setScannerVisible(false)}
         childDevice={selectedChildDevice}
+        viewerRole="CHILD"
       />
 
     </ScrollView>
@@ -844,5 +925,65 @@ const styles = StyleSheet.create({
   historyBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  a11yBanner: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: Radii.lg,
+    borderWidth: 1.5,
+    padding: 14,
+    gap: 10,
+  },
+  a11yBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  a11yIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: Radii.full,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  a11yBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  a11yBannerDesc: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  a11yBtn: {
+    backgroundColor: '#f59e0b',
+    borderRadius: Radii.md,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  a11yBtnText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  activeProtectionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: Radii.lg,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  activeProtectionText: {
+    color: '#10b981',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

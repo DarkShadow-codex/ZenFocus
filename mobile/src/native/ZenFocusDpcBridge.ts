@@ -14,6 +14,12 @@ interface NativeDpcModuleInterface {
   isDndAccessGranted(): Promise<boolean>;
   requestDndAccess(): Promise<boolean>;
   requestDeviceAdmin(): Promise<boolean>;
+  isAccessibilityServiceEnabled?(): Promise<boolean>;
+  openAccessibilitySettings?(): Promise<boolean>;
+  isIgnoringBatteryOptimizations?(): Promise<boolean>;
+  requestIgnoreBatteryOptimizations?(): Promise<boolean>;
+  startBackgroundService?(): Promise<boolean>;
+  getBlockedPackages?(): Promise<string[]>;
   startStudySession?(durationMinutes: number, sessionName: string): Promise<boolean>;
   adjustStudySession?(deltaMinutes: number): Promise<boolean>;
   stopStudySession?(): Promise<boolean>;
@@ -74,6 +80,81 @@ class ZenFocusDpcBridgeService {
     }
 
     return this.simulatedCapabilities;
+  }
+
+  /**
+   * Checks if ZenFocus Accessibility Service is active for real-time app suspension
+   */
+  async isAccessibilityServiceEnabled(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    if (NativeZenFocusDpc?.isAccessibilityServiceEnabled) {
+      try {
+        return await NativeZenFocusDpc.isAccessibilityServiceEnabled();
+      } catch (err) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Opens Android Accessibility Settings so user can enable ZenFocus App Blocker
+   */
+  async openAccessibilitySettings(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    if (NativeZenFocusDpc?.openAccessibilitySettings) {
+      try {
+        return await NativeZenFocusDpc.openAccessibilitySettings();
+      } catch (err) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Checks if ZenFocus is whitelisted from battery optimizations on Android
+   */
+  async isIgnoringBatteryOptimizations(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    if (NativeZenFocusDpc?.isIgnoringBatteryOptimizations) {
+      try {
+        return await NativeZenFocusDpc.isIgnoringBatteryOptimizations();
+      } catch (err) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Prompts user or opens settings to whitelist app from battery optimization (Unrestricted background)
+   */
+  async requestIgnoreBatteryOptimizations(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    if (NativeZenFocusDpc?.requestIgnoreBatteryOptimizations) {
+      try {
+        return await NativeZenFocusDpc.requestIgnoreBatteryOptimizations();
+      } catch (err) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Explicitly starts the persistent background foreground service
+   */
+  async startBackgroundService(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    if (NativeZenFocusDpc?.startBackgroundService) {
+      try {
+        return await NativeZenFocusDpc.startBackgroundService();
+      } catch (err) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

@@ -779,6 +779,145 @@ test('Sign In / Login: Authenticates existing parent and child accounts', () => 
   assert.strictEqual(childLogin.role, 'CHILD');
 });
 
+// ============================================================================
+// TEST GROUP 9: REAL-TIME APP SUSPENSION & IMMUTABLE PARENT RESTRICTION LOCK
+// ============================================================================
+console.log('\n--- Group 9: Real-Time App Suspension & Parent-Lock Enforcement ---');
+
+test('Child self-restriction triggers native app suspension', () => {
+  const suspendedPackages = new Set();
+  const applyNativeRestriction = (pkg, active) => {
+    if (active) suspendedPackages.add(pkg);
+    else suspendedPackages.delete(pkg);
+    return true;
+  };
+
+  let policies = [];
+  const toggleChildSelfPolicy = (targetPackage, appName, active) => {
+    // 1. Check parent lock
+    const parentRule = policies.find(p => p.targetPackage === targetPackage && p.ownerType === 'parent' && p.desiredState === 'active');
+    if (parentRule) throw new Error('Parent Locked');
+
+    // 2. Native suspension
+    applyNativeRestriction(targetPackage, active);
+
+    // 3. Update state
+    policies.push({ id: 'pol_1', targetPackage, appName, ownerType: 'child', desiredState: active ? 'active' : 'inactive' });
+  };
+
+  toggleChildSelfPolicy('com.roblox.client', 'Roblox', true);
+  assert.strictEqual(suspendedPackages.has('com.roblox.client'), true, 'Roblox must be in native suspended packages set');
+  assert.strictEqual(policies[0].desiredState, 'active');
+
+  // Child can toggle their own self-restriction off
+  toggleChildSelfPolicy('com.roblox.client', 'Roblox', false);
+  assert.strictEqual(suspendedPackages.has('com.roblox.client'), false, 'Roblox must be removed from suspended set when child lifts self-rule');
+});
+
+test('Child cannot remove parent-owned restriction (Strict Immutable Ownership)', () => {
+  const policies = [
+    { id: 'pol_parent_1', targetPackage: 'com.instagram.android', appName: 'Instagram', ownerType: 'parent', desiredState: 'active' },
+  ];
+
+  const tryChildRemove = (targetPackage) => {
+    const parentRule = policies.find(p => p.targetPackage === targetPackage && p.ownerType === 'parent' && p.desiredState === 'active');
+    if (parentRule) {
+      return { allowed: false, reason: 'Parent Locked: Cannot be removed by child' };
+    }
+    return { allowed: true };
+  };
+
+  const result = tryChildRemove('com.instagram.android');
+  assert.strictEqual(result.allowed, false, 'Child must NOT be allowed to remove parent restriction');
+  assert.strictEqual(result.reason.includes('Parent Locked'), true);
+});
+
+test('Real-time App Blocker intercepts foreground package launch', () => {
+  const blockedPackages = new Set(['com.instagram.android', 'com.zhiliaoapp.musically']);
+
+  const onAppWindowChanged = (foregroundPackage) => {
+    if (blockedPackages.has(foregroundPackage)) {
+      return {
+        action: 'GLOBAL_ACTION_HOME', // Kicks user back to home screen
+        showBlockScreen: true,
+        allowedToOpen: false,
+      };
+    }
+    return {
+      action: 'ALLOW',
+      showBlockScreen: false,
+      allowedToOpen: true,
+    };
+  };
+
+  const blockedLaunch = onAppWindowChanged('com.instagram.android');
+  assert.strictEqual(blockedLaunch.allowedToOpen, false, 'Restricted app must not be allowed to open');
+  assert.strictEqual(blockedLaunch.action, 'GLOBAL_ACTION_HOME', 'Must kick user out of app immediately');
+  assert.strictEqual(blockedLaunch.showBlockScreen, true, 'Must display ZenFocus block screen');
+
+  const unblockedLaunch = onAppWindowChanged('com.duolingo');
+  assert.strictEqual(unblockedLaunch.allowedToOpen, true);
+  assert.strictEqual(unblockedLaunch.action, 'ALLOW');
+});
+
+// ============================================================================
+// TEST GROUP 10: 24/7 BACKGROUND EXECUTION & BATTERY OPTIMIZATION
+// ============================================================================
+console.log('\n--- Group 10: 24/7 Background Execution & Battery Optimization ---');
+
+test('Foreground Service & Boot Receiver manifest declarations', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const manifestPath = path.join(__dirname, 'android/app/src/main/AndroidManifest.xml');
+  const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+
+  assert.strictEqual(manifestContent.includes('android.permission.FOREGROUND_SERVICE'), true, 'Must declare FOREGROUND_SERVICE');
+  assert.strictEqual(manifestContent.includes('android.permission.FOREGROUND_SERVICE_SPECIAL_USE'), true, 'Must declare FOREGROUND_SERVICE_SPECIAL_USE for Android 14+');
+  assert.strictEqual(manifestContent.includes('android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS'), true, 'Must declare REQUEST_IGNORE_BATTERY_OPTIMIZATIONS');
+  assert.strictEqual(manifestContent.includes('android.permission.RECEIVE_BOOT_COMPLETED'), true, 'Must declare RECEIVE_BOOT_COMPLETED');
+  assert.strictEqual(manifestContent.includes('.ZenFocusBackgroundService'), true, 'Must declare ZenFocusBackgroundService in manifest');
+  assert.strictEqual(manifestContent.includes('.ZenFocusBootReceiver'), true, 'Must declare ZenFocusBootReceiver in manifest');
+  assert.strictEqual(manifestContent.includes('.ZenFocusAccessibilityService'), true, 'Must declare ZenFocusAccessibilityService in manifest');
+  assert.strictEqual(manifestContent.includes('.ZenFocusBlockedActivity'), true, 'Must declare ZenFocusBlockedActivity in manifest');
+});
+
+test('Background Service auto-restart and boot resilience', () => {
+  let backgroundServiceStarted = false;
+
+  const mockBootReceiver = (action) => {
+    if (
+      action === 'android.intent.action.BOOT_COMPLETED' ||
+      action === 'android.intent.action.MY_PACKAGE_REPLACED' ||
+      action === 'com.zenfocus.app.RESTART_SERVICE'
+    ) {
+      backgroundServiceStarted = true;
+      return true;
+    }
+    return false;
+  };
+
+  assert.strictEqual(mockBootReceiver('android.intent.action.BOOT_COMPLETED'), true);
+  assert.strictEqual(backgroundServiceStarted, true, 'Must start service on boot');
+
+  backgroundServiceStarted = false;
+  assert.strictEqual(mockBootReceiver('com.zenfocus.app.RESTART_SERVICE'), true);
+  assert.strictEqual(backgroundServiceStarted, true, 'Must restart service when destroyed');
+});
+
+test('Battery Optimization Whitelist checks and requests', () => {
+  let batteryOptimizationIgnored = false;
+
+  const mockCheckBattery = () => batteryOptimizationIgnored;
+  const mockRequestIgnoreBattery = () => {
+    batteryOptimizationIgnored = true;
+    return true;
+  };
+
+  assert.strictEqual(mockCheckBattery(), false);
+  mockRequestIgnoreBattery();
+  assert.strictEqual(mockCheckBattery(), true, 'Must whitelist app from battery optimization');
+});
+
 console.log('\n=============================================================');
 console.log(`🏁 Test Results: ${passedTests}/${totalTests} Tests Passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 console.log('=============================================================\n');

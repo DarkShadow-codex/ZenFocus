@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   UserRole,
@@ -425,6 +425,17 @@ interface ZenFocusContextType {
   isScanningApps: boolean;
   scanChildDeviceApps: (childDeviceId: string) => Promise<ScanResult>;
 
+  // Accessibility & Native Blocker
+  isAccessibilityEnabled: boolean;
+  checkAccessibilityPermission: () => Promise<boolean>;
+  openAccessibilitySettings: () => Promise<boolean>;
+
+  // Background Execution & Battery Optimization
+  isBatteryOptimizationIgnored: boolean;
+  checkBatteryOptimizationStatus: () => Promise<boolean>;
+  requestIgnoreBatteryOptimizations: () => Promise<boolean>;
+  startBackgroundProtection: () => Promise<boolean>;
+
   // Policy actions
   toggleParentPolicy: (policyId: string, desiredState: 'active' | 'inactive') => Promise<CommandReceipt>;
   toggleChildSelfPolicy: (targetPackage: string, appName: string, active: boolean) => void;
@@ -515,6 +526,68 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     osVersion: 'iOS 17.4',
     appVersion: '1.0.0-screentime',
   });
+
+  const [isAccessibilityEnabled, setIsAccessibilityEnabled] = useState<boolean>(true);
+  const [isBatteryOptimizationIgnored, setIsBatteryOptimizationIgnored] = useState<boolean>(true);
+
+  const checkAccessibilityPermission = async (): Promise<boolean> => {
+    try {
+      const enabled = await ZenFocusNative.isAccessibilityServiceEnabled();
+      setIsAccessibilityEnabled(enabled);
+      return enabled;
+    } catch (e) {
+      return true;
+    }
+  };
+
+  const openAccessibilitySettings = async (): Promise<boolean> => {
+    try {
+      return await ZenFocusNative.openAccessibilitySettings();
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const checkBatteryOptimizationStatus = async (): Promise<boolean> => {
+    try {
+      const ignored = await ZenFocusNative.isIgnoringBatteryOptimizations();
+      setIsBatteryOptimizationIgnored(ignored);
+      return ignored;
+    } catch (e) {
+      return true;
+    }
+  };
+
+  const requestIgnoreBatteryOptimizations = async (): Promise<boolean> => {
+    try {
+      const res = await ZenFocusNative.requestIgnoreBatteryOptimizations();
+      setTimeout(checkBatteryOptimizationStatus, 2000);
+      return res;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const startBackgroundProtection = async (): Promise<boolean> => {
+    try {
+      return await ZenFocusNative.startBackgroundService();
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Sync active restrictions to native blocker on mount, start background protection service, and check permissions
+  useEffect(() => {
+    checkAccessibilityPermission();
+    checkBatteryOptimizationStatus();
+    startBackgroundProtection();
+    // Synchronize all currently active policies with the native blocking engine
+    policies.forEach((pol) => {
+      if (pol.desiredState === 'active') {
+        ZenFocusNative.applyAppRestriction(pol.targetPackage, true).catch(() => {});
+      }
+    });
+  }, []);
 
   const selectedChildDevice: ChildDevice =
     childDevices.find((d) => d.id === selectedChildDeviceId) ||
@@ -1027,13 +1100,23 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Child Self-Imposed Policy: Student can only modify CHILD-owned policies
   const toggleChildSelfPolicy = (targetPackage: string, appName: string, active: boolean) => {
-    // Check if locked by parent
+    // 1. Strict Immutable Ownership Rule: Child CANNOT modify or remove Parent-owned policies
     const parentRule = policies.find((p) => p.targetPackage === targetPackage && p.ownerType === 'parent');
     if (parentRule && parentRule.desiredState === 'active') {
       console.warn(`[ZenFocus] Child cannot override parent-owned restriction on ${appName}`);
+      Alert.alert(
+        'Parent Locked',
+        `Access to ${appName} is restricted by your parent guardian and cannot be unblocked from a child account.`
+      );
       return;
     }
 
+    // 2. Immediately invoke native platform restriction to suspend/unsuspend app in OS
+    ZenFocusNative.applyAppRestriction(targetPackage, active).catch((err) => {
+      console.warn('[ZenFocus] Error applying native child restriction:', err);
+    });
+
+    // 3. Update policies state & persist immediately
     setPolicies((prev) => {
       const existing = prev.find((p) => p.targetPackage === targetPackage && p.ownerType === 'child');
       let updated: RestrictionPolicy[];
@@ -1075,6 +1158,9 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    if (newPolicy.desiredState === 'active') {
+      ZenFocusNative.applyAppRestriction(newPolicy.targetPackage, true).catch(() => {});
+    }
     const updated = [...policies, newPolicy];
     setPolicies(updated);
     AsyncStorage.setItem('zenfocus_policies', JSON.stringify(updated)).catch(console.error);
@@ -1291,6 +1377,13 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         scannedAppsByDevice,
         isScanningApps,
         scanChildDeviceApps,
+        isAccessibilityEnabled,
+        checkAccessibilityPermission,
+        openAccessibilitySettings,
+        isBatteryOptimizationIgnored,
+        checkBatteryOptimizationStatus,
+        requestIgnoreBatteryOptimizations,
+        startBackgroundProtection,
         toggleParentPolicy,
         toggleChildSelfPolicy,
         addParentPolicy,

@@ -164,6 +164,46 @@ class ZenFocusNativeBridgeService {
     }
     return await ZenFocusDpc.scanInstalledApplications();
   }
+
+  /**
+   * Checks if Android Accessibility Service (real-time app suspension shield) is enabled
+   */
+  async isAccessibilityServiceEnabled(): Promise<boolean> {
+    if (this.getActivePlatform() === 'ios') return true;
+    return await ZenFocusDpc.isAccessibilityServiceEnabled();
+  }
+
+  /**
+   * Opens Android Accessibility Settings to grant app suspension permission
+   */
+  async openAccessibilitySettings(): Promise<boolean> {
+    if (this.getActivePlatform() === 'ios') return true;
+    return await ZenFocusDpc.openAccessibilitySettings();
+  }
+
+  /**
+   * Checks if app is whitelisted from battery optimizations (Unrestricted background)
+   */
+  async isIgnoringBatteryOptimizations(): Promise<boolean> {
+    if (this.getActivePlatform() === 'ios') return true;
+    return await ZenFocusDpc.isIgnoringBatteryOptimizations();
+  }
+
+  /**
+   * Prompts user to grant Unrestricted battery / Ignore battery optimizations
+   */
+  async requestIgnoreBatteryOptimizations(): Promise<boolean> {
+    if (this.getActivePlatform() === 'ios') return true;
+    return await ZenFocusDpc.requestIgnoreBatteryOptimizations();
+  }
+
+  /**
+   * Ensures the persistent background service is running
+   */
+  async startBackgroundService(): Promise<boolean> {
+    if (this.getActivePlatform() === 'ios') return true;
+    return await ZenFocusDpc.startBackgroundService();
+  }
 }
 
 export const ZenFocusNative = new ZenFocusNativeBridgeService();

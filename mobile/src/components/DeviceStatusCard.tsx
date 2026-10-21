@@ -129,30 +129,30 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
           // Android DPC Capabilities
           <>
             <View style={styles.gridItem}>
-              <Ionicons name="checkmark-circle" size={16} color={Palette.success} />
+              <Ionicons name="shield-checkmark" size={16} color={Palette.success} />
               <Text style={[styles.gridLabel, { color: theme.textPrimary }]}>
-                Package Suspension (DPC)
+                Real-Time App Suspension &amp; Blocker Shield
               </Text>
             </View>
 
             <View style={styles.gridItem}>
-              <Ionicons name="checkmark-circle" size={16} color={Palette.success} />
+              <Ionicons name="pulse" size={16} color={Palette.primary} />
               <Text style={[styles.gridLabel, { color: theme.textPrimary }]}>
-                DND Notification Policy Granted
+                24/7 Persistent Background Service
               </Text>
             </View>
 
             <View style={styles.gridItem}>
-              <Ionicons name="shield-checkmark" size={16} color={Palette.primary} />
+              <Ionicons name="battery-charging" size={16} color={Palette.success} />
               <Text style={[styles.gridLabel, { color: theme.textPrimary }]}>
-                Tamper & Uninstall Protection
+                Unrestricted Background Battery Profile
               </Text>
             </View>
 
             <View style={styles.gridItem}>
               <Ionicons name="sync-circle" size={16} color={Palette.tertiary} />
               <Text style={[styles.gridLabel, { color: theme.textPrimary }]}>
-                Offline Schedule Sync Active
+                Instant Parent Restriction Sync Active
               </Text>
             </View>
           </>

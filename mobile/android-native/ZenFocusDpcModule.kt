@@ -55,27 +55,138 @@ class ZenFocusDpcModule(private val reactContext: ReactApplicationContext) :
     }
 
     /**
-     * Suspends or unsuspends a target app package using DevicePolicyManager.setPackagesSuspended.
-     * When suspended, the app icon is grayed out, unable to launch, and its notifications are suppressed.
+     * Suspends or unsuspends a target app package.
+     * 1. Updates ZenFocusBlockerManager so the real-time accessibility blocker immediately intercepts the app if launched.
+     * 2. Also attempts DevicePolicyManager.setPackagesSuspended if provisioned as Device Owner.
      */
     @ReactMethod
     fun setPackageSuspended(packageName: String, suspended: Boolean, promise: Promise) {
         try {
+            // 1. Update real-time persistent app blocker
+            ZenFocusBlockerManager.setAppBlocked(reactContext, packageName, suspended)
+
+            // 2. Also attempt DPC suspension if Device Owner / Profile Owner
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val packages = arrayOf(packageName)
-                val failedPackages = devicePolicyManager.setPackagesSuspended(adminComponent, packages, suspended)
-                if (failedPackages == null || failedPackages.isEmpty()) {
-                    promise.resolve(true)
-                } else {
-                    promise.resolve(false)
-                }
-            } else {
-                promise.reject("ERR_UNSUPPORTED_API", "setPackagesSuspended requires Android 7.0 (API 24)+")
+                try {
+                    val packages = arrayOf(packageName)
+                    devicePolicyManager.setPackagesSuspended(adminComponent, packages, suspended)
+                } catch (ignored: Exception) {}
             }
-        } catch (e: SecurityException) {
-            promise.reject("ERR_SECURITY_DPC", "Caller must be Device Owner or Profile Owner: ${e.message}", e)
+
+            promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("ERR_DPC_SUSPEND", e.message, e)
+        }
+    }
+
+    /**
+     * Checks if ZenFocus Accessibility Service is enabled in Android Settings.
+     */
+    @ReactMethod
+    fun isAccessibilityServiceEnabled(promise: Promise) {
+        try {
+            val expectedService = ComponentName(reactContext, ZenFocusAccessibilityService::class.java).flattenToString()
+            val enabledServices = Settings.Secure.getString(
+                reactContext.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+            val isEnabled = enabledServices.contains(expectedService)
+            promise.resolve(isEnabled)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    /**
+     * Opens Android Accessibility Settings so the user can toggle ON the ZenFocus App Blocker.
+     */
+    @ReactMethod
+    fun openAccessibilitySettings(promise: Promise) {
+        try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactContext.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERR_OPEN_A11Y", e.message, e)
+        }
+    }
+
+    /**
+     * Returns the list of currently blocked packages.
+     */
+    @ReactMethod
+    fun getBlockedPackages(promise: Promise) {
+        try {
+            val list = ZenFocusBlockerManager.getAllBlockedPackages(reactContext)
+            val array = Arguments.createArray()
+            for (pkg in list) {
+                array.pushString(pkg)
+            }
+            promise.resolve(array)
+        } catch (e: Exception) {
+            promise.reject("ERR_GET_BLOCKED", e.message, e)
+        }
+    }
+
+    /**
+     * Checks if ZenFocus is currently whitelisted from battery optimization.
+     */
+    @ReactMethod
+    fun isIgnoringBatteryOptimizations(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = reactContext.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                val isIgnoring = powerManager?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: true
+                promise.resolve(isIgnoring)
+            } else {
+                promise.resolve(true)
+            }
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    /**
+     * Requests user to whitelist ZenFocus from battery optimizations (Unrestricted background).
+     */
+    @ReactMethod
+    fun requestIgnoreBatteryOptimizations(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:${reactContext.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    reactContext.startActivity(intent)
+                    promise.resolve(true)
+                } catch (e: Exception) {
+                    val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    reactContext.startActivity(fallbackIntent)
+                    promise.resolve(true)
+                }
+            } else {
+                promise.resolve(true)
+            }
+        } catch (e: Exception) {
+            promise.reject("ERR_BATTERY_OPT", e.message, e)
+        }
+    }
+
+    /**
+     * Explicitly starts the persistent background foreground service.
+     */
+    @ReactMethod
+    fun startBackgroundService(promise: Promise) {
+        try {
+            ZenFocusBackgroundService.start(reactContext)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERR_START_BG_SERVICE", e.message, e)
         }
     }
 
@@ -203,7 +314,8 @@ class ZenFocusDpcModule(private val reactContext: ReactApplicationContext) :
                                 isSuspended = devicePolicyManager.isPackageSuspended(adminComponent, pkg.packageName)
                             } catch (ignored: Exception) {}
                         }
-                        putBoolean("isRestricted", isSuspended)
+                        val isBlocked = isSuspended || ZenFocusBlockerManager.isAppBlocked(reactContext, pkg.packageName)
+                        putBoolean("isRestricted", isBlocked)
 
                         // Heuristic category mapping
                         val cat = when {
@@ -225,4 +337,3 @@ class ZenFocusDpcModule(private val reactContext: ReactApplicationContext) :
         }
     }
 }
-

@@ -15,16 +15,18 @@ import {
   Switch,
   ActivityIndicator,
   Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Palette, Radii } from '../theme';
-import { ChildDevice, ScannedApp, ScanResult } from '../types';
+import { ChildDevice, ScannedApp, ScanResult, UserRole } from '../types';
 import { useZenFocus } from '../store/ZenFocusContext';
 
 interface AppScannerModalProps {
   visible: boolean;
   onClose: () => void;
   childDevice: ChildDevice;
+  viewerRole?: UserRole;
 }
 
 type CategoryFilter = 'All' | 'New' | 'Social' | 'Gaming' | 'Entertainment' | 'Productivity';
@@ -33,6 +35,7 @@ export const AppScannerModal: React.FC<AppScannerModalProps> = ({
   visible,
   onClose,
   childDevice,
+  viewerRole,
 }) => {
   const {
     themeMode,
@@ -40,6 +43,8 @@ export const AppScannerModal: React.FC<AppScannerModalProps> = ({
     isScanningApps,
     scanChildDeviceApps,
     toggleAppRestrictionForChild,
+    policies,
+    toggleChildSelfPolicy,
   } = useZenFocus();
 
   const theme = Palette[themeMode];
@@ -61,6 +66,30 @@ export const AppScannerModal: React.FC<AppScannerModalProps> = ({
 
   const handleToggleApp = async (app: ScannedApp, nextState: boolean) => {
     try {
+      // If viewer is CHILD, enforce Immutable Ownership rule
+      if (viewerRole === 'CHILD') {
+        const parentPolicy = policies.find(
+          (p) => p.targetPackage === app.targetPackage && p.ownerType === 'parent' && p.desiredState === 'active'
+        );
+        if (parentPolicy && !nextState) {
+          Alert.alert(
+            'Parent Locked',
+            `Access to ${app.appName} is restricted by your parent guardian and cannot be unblocked from a child account.`
+          );
+          return;
+        }
+
+        toggleChildSelfPolicy(app.targetPackage, app.appName, nextState);
+        setFeedbackToast(
+          nextState
+            ? `🔒 ${app.appName} self-blocked for study focus`
+            : `🔓 ${app.appName} self-restriction removed`
+        );
+        setTimeout(() => setFeedbackToast(null), 2500);
+        return;
+      }
+
+      // Viewer is PARENT: full management
       const res = await toggleAppRestrictionForChild(
         childDevice.id,
         app.targetPackage,
@@ -428,26 +457,54 @@ export const AppScannerModal: React.FC<AppScannerModalProps> = ({
                         </View>
 
                         {/* Instant 1-tap Restriction Switch */}
-                        <View style={styles.switchContainer}>
-                          <Text
-                            style={[
-                              styles.switchLabel,
-                              {
-                                color: app.isRestricted ? '#ff4d4f' : theme.textSecondary,
-                                fontWeight: app.isRestricted ? '700' : '500',
-                              },
-                            ]}
-                          >
-                            {app.isRestricted ? 'BLOCKED' : 'ALLOWED'}
-                          </Text>
-                          <Switch
-                            value={app.isRestricted}
-                            onValueChange={(val) => handleToggleApp(app, val)}
-                            trackColor={{ false: theme.surfaceBorder, true: '#ff4d4f' }}
-                            thumbColor="#ffffff"
-                            testID={`scan-toggle-${app.appName.toLowerCase().replace(/\s+/g, '-')}`}
-                          />
-                        </View>
+                        {(() => {
+                          const isParentLocked =
+                            viewerRole === 'CHILD' &&
+                            policies.some(
+                              (p) =>
+                                p.targetPackage === app.targetPackage &&
+                                p.ownerType === 'parent' &&
+                                p.desiredState === 'active'
+                            );
+
+                          return (
+                            <View style={styles.switchContainer}>
+                              {isParentLocked ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <Ionicons name="lock-closed" size={12} color={Palette.primary} />
+                                  <Text
+                                    style={[
+                                      styles.switchLabel,
+                                      { color: Palette.primary, fontWeight: '700' },
+                                    ]}
+                                  >
+                                    LOCKED
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text
+                                  style={[
+                                    styles.switchLabel,
+                                    {
+                                      color: app.isRestricted ? '#ff4d4f' : theme.textSecondary,
+                                      fontWeight: app.isRestricted ? '700' : '500',
+                                    },
+                                  ]}
+                                >
+                                  {app.isRestricted ? 'BLOCKED' : 'ALLOWED'}
+                                </Text>
+                              )}
+                              <Switch
+                                value={app.isRestricted}
+                                disabled={isParentLocked}
+                                onValueChange={(val) => handleToggleApp(app, val)}
+                                trackColor={{ false: theme.surfaceBorder, true: isParentLocked ? Palette.primary : '#ff4d4f' }}
+                                thumbColor="#ffffff"
+                                testID={`scan-toggle-${app.appName.toLowerCase().replace(/\s+/g, '-')}`}
+                              />
+                            </View>
+                          );
+                        })()}
                       </View>
                     );
                   })

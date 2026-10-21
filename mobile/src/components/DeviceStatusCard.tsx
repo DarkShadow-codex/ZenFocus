@@ -74,12 +74,12 @@ export const DeviceStatusCard: React.FC<DeviceStatusCardProps> = ({
               color={isIos ? '#007aff' : Palette.primary}
             />
           </View>
-          <View>
-            <Text style={[styles.deviceName, { color: theme.textPrimary }]}>
+          <View style={styles.deviceInfoCol}>
+            <Text style={[styles.deviceName, { color: theme.textPrimary }]} numberOfLines={1}>
               {displayDeviceName}
             </Text>
-            <Text style={[styles.osText, { color: theme.textSecondary }]}>
-              {capabilities.osVersion} • {isIos ? 'Apple Screen Time Engine v1.0.0' : 'DPC Engine v1.0.4'}
+            <Text style={[styles.osText, { color: theme.textSecondary }]} numberOfLines={1}>
+              {capabilities.osVersion} • {isIos ? 'Apple Screen Time Engine' : 'DPC Engine v1.0.4'}
             </Text>
           </View>
         </View>
@@ -206,34 +206,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 8,
   },
   titleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1,
+    marginRight: 6,
+  },
+  deviceInfoCol: {
+    flex: 1,
   },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: Radii.md,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   deviceName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   osText: {
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
   },
   badgeSuccess: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: Radii.full,
+    flexShrink: 0,
   },
   dot: {
     width: 6,
@@ -242,10 +250,10 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.success,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   capabilityGrid: {
     borderWidth: 1,

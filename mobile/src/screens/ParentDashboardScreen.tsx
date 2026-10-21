@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
   },
   quickActionRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginHorizontal: 16,
     marginBottom: 16,
   },
@@ -530,8 +530,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: Radii.lg,
     borderWidth: 1,
     shadowColor: '#000',
@@ -541,7 +542,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   quickBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   card: {

@@ -189,37 +189,39 @@ const styles = StyleSheet.create({
   titleBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    flexWrap: 'wrap',
   },
   title: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   countBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radii.full,
   },
   countText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 4,
   },
   pairBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: Radii.md,
     borderWidth: 1,
+    flexShrink: 0,
   },
   pairBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   scrollList: {

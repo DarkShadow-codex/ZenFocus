@@ -336,4 +336,126 @@ class ZenFocusDpcModule(private val reactContext: ReactApplicationContext) :
             promise.reject("ERR_SCAN_APPS", e.message, e)
         }
     }
+
+    /**
+     * Checks whether Usage Access (PACKAGE_USAGE_STATS) has been authorized.
+     */
+    @ReactMethod
+    fun hasUsageStatsPermission(promise: Promise) {
+        try {
+            val hasPerm = ZenFocusUsageStatsTracker.hasUsageStatsPermission(reactContext)
+            promise.resolve(hasPerm)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    /**
+     * Opens Android Usage Access Settings screen.
+     */
+    @ReactMethod
+    fun openUsageAccessSettings(promise: Promise) {
+        try {
+            val intent = ZenFocusUsageStatsTracker.getUsageAccessSettingsIntent()
+            reactContext.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERR_OPEN_USAGE_SETTINGS", e.message, e)
+        }
+    }
+
+    /**
+     * Queries daily app usage totals.
+     */
+    @ReactMethod
+    fun queryUsageStats(startTime: Double, endTime: Double, promise: Promise) {
+        try {
+            val stats = ZenFocusUsageStatsTracker.queryUsageStats(
+                reactContext,
+                startTime.toLong(),
+                endTime.toLong()
+            )
+            promise.resolve(stats)
+        } catch (e: Exception) {
+            promise.reject("ERR_QUERY_USAGE_STATS", e.message, e)
+        }
+    }
+
+    /**
+     * Honest Android Enforcement Status.
+     * Evaluates whether restrictions can ACTUALLY be enforced locally.
+     * Protection is active if:
+     * (1) App is Device Owner (DPC hardware-level suspension), OR
+     * (2) Accessibility Service is actively enabled in Android Settings.
+     * If neither is active, protectionActive is FALSE and diagnostic clearly explains.
+     */
+    @ReactMethod
+    fun getEnforcementStatus(promise: Promise) {
+        try {
+            val isDO = try { devicePolicyManager.isDeviceOwnerApp(reactContext.packageName) } catch (e: Exception) { false }
+            val expectedService = ComponentName(reactContext, ZenFocusAccessibilityService::class.java).flattenToString()
+            val enabledServices = Settings.Secure.getString(
+                reactContext.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+            val isA11yEnabled = enabledServices.contains(expectedService)
+            val hasUsageStats = ZenFocusUsageStatsTracker.hasUsageStatsPermission(reactContext)
+            val isDnd = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                notificationManager.isNotificationPolicyAccessGranted
+            } else true
+            val isIgnoringBattery = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = reactContext.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                powerManager?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: true
+            } else true
+            val blockedList = ZenFocusBlockerManager.getAllBlockedPackages(reactContext)
+
+            val canEnforce = isDO || isA11yEnabled
+
+            val statusMap = Arguments.createMap().apply {
+                putBoolean("isDeviceOwner", isDO)
+                putBoolean("isAccessibilityEnabled", isA11yEnabled)
+                putBoolean("hasUsageStatsPermission", hasUsageStats)
+                putBoolean("isDndAccessGranted", isDnd)
+                putBoolean("isIgnoringBatteryOptimizations", isIgnoringBattery)
+                putBoolean("protectionActive", canEnforce)
+                putInt("blockedPackagesCount", blockedList.size)
+                putString("osVersion", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                putString("appVersion", "1.0.4-dpc")
+                putString(
+                    "diagnostic",
+                    when {
+                        isDO -> "ENFORCEMENT_DEVICE_OWNER: Hardware-level package suspension active."
+                        isA11yEnabled -> "ENFORCEMENT_ACCESSIBILITY: Real-time window interception active."
+                        else -> "ENFORCEMENT_UNAVAILABLE: Accessibility service not enabled and device owner not provisioned."
+                    }
+                )
+            }
+            promise.resolve(statusMap)
+        } catch (e: Exception) {
+            promise.reject("ERR_ENFORCEMENT_STATUS", e.message, e)
+        }
+    }
+
+    /**
+     * Reconciles local restrictions when app resumes or re-syncs.
+     * Ensures all packages marked as blocked in SharedPreferences are properly
+     * maintained in the blocker memory and DPC.
+     */
+    @ReactMethod
+    fun reconcileRestrictions(promise: Promise) {
+        try {
+            val blockedList = ZenFocusBlockerManager.getAllBlockedPackages(reactContext)
+            val isDO = try { devicePolicyManager.isDeviceOwnerApp(reactContext.packageName) } catch (e: Exception) { false }
+
+            if (isDO && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && blockedList.isNotEmpty()) {
+                try {
+                    devicePolicyManager.setPackagesSuspended(adminComponent, blockedList.toTypedArray(), true)
+                } catch (ignored: Exception) {}
+            }
+            promise.resolve(blockedList.size)
+        } catch (e: Exception) {
+            promise.reject("ERR_RECONCILE", e.message, e)
+        }
+    }
 }
+

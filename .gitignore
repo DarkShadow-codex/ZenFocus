@@ -171,6 +171,7 @@ web-build/
 expo-env.d.ts
 expo_qr.png
 *.apk
+*.idsig
 *.aab
 *.ipa
 *.app

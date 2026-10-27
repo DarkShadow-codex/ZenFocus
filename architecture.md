@@ -104,24 +104,56 @@ rather than separate microservices):
 The enforcement engine runs on the child device, not on the parent's
 phone or the server.
 
-**Android adapter (Kotlin):** - Device Policy Controller
-implementation. - `DevicePolicyManager` integration. - Eligible
-`setPackagesSuspended()` and `setUninstallBlocked()` operations. -
-DND/notification policy integration only after required authorization. -
-Local policy cache, schedule evaluation, enforcement receipt
-reporting. - Device-owner/profile-owner provisioning and capability
-checks.
+**Android adapter (Kotlin):**
+- Device Policy Controller (`ZenFocusDpcModule`) implementation.
+- `DevicePolicyManager` integration: eligible `setPackagesSuspended()` and `setUninstallBlocked()` operations for Device Owner / Profile Owner.
+- Accessibility Service (`ZenFocusAccessibilityService`) foreground window detection and blocking intervention overlay when non-DO.
+- `UsageStatsManager` tracking (`ZenFocusUsageStatsTracker`): daily foreground time aggregation, interval deduplication, and strictly zero data fabrication (`permissionGranted: false` and 0 minutes when unauthorized).
+- DND / notification policy integration (`NotificationManager.isNotificationPolicyAccessGranted`) only after explicit user authorization.
+- Honest enforcement status checks: `protectionActive = isDeviceOwner || isAccessibilityEnabled`.
+- Local policy cache, schedule evaluation, and enforcement receipt reporting.
 
-**iOS adapter (Swift):** - Family Controls authorization and entitlement
-checks. - `FamilyActivityPicker` / `FamilyActivitySelection` for
-supported selection. - ManagedSettings shields and restrictions. -
-DeviceActivity schedules and monitoring extensions. - Local policy cache
-and result reporting. - Capability checks for authorization, selected
-tokens, and active schedules.
+**iOS adapter (Swift):**
+- Family Controls authorization and entitlement checks (`AuthorizationCenter.shared`).
+- `FamilyActivityPicker` / `FamilyActivitySelection` for supported selection.
+- ManagedSettings shields and restrictions (`ManagedSettingsStore(named: ...)` with store isolation).
+- DeviceActivity schedules and monitoring extensions (`DeviceActivityMonitorExtension`).
+- App Groups (`group.com.zenfocus.app`) for secure shared state between main app and extensions.
+- Local policy cache and result reporting.
+- Capability checks for authorization, selected tokens, and active schedules.
 
-The server must not assume Android package names and iOS opaque app
-tokens are interchangeable. A platform-specific target reference belongs
-to the device that created it.
+The server must not assume Android package names and iOS opaque app tokens are interchangeable. A platform-specific target reference belongs to the device that created it.
+
+### 3.4 Shared Focus Session Engine (`FocusEngine`)
+
+A deterministic, cross-platform state machine implemented in TypeScript (`mobile/src/engine/FocusEngine.ts`) and shared across Android and iOS clients:
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> PREPARING : prepareSession()
+    PREPARING --> FOCUSING : startFocus()
+    PREPARING --> CANCELLED : cancel()
+    FOCUSING --> BREAK : startBreak()
+    FOCUSING --> PAUSED : pause() [if !strictMode]
+    FOCUSING --> COMPLETED : deadline elapsed / complete()
+    FOCUSING --> CANCELLED : cancel() [if !strictMode]
+    BREAK --> FOCUSING : resumeFocus()
+    BREAK --> COMPLETED : complete()
+    PAUSED --> FOCUSING : resumeFocus()
+    PAUSED --> CANCELLED : cancel()
+    FOCUSING --> ERROR : unrecoverable fault
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+    ERROR --> IDLE : reset()
+```
+
+- **8-State Deterministic FSM**: Strictly validated transition matrix rejecting invalid state jumps.
+- **Authoritative Deadline Arithmetic**: Session remaining duration is computed from `deadline = startedAt + durationMs`, eliminating unbounded drift from naive interval callbacks.
+- **Monotonic Clock Drift Compensation**: Compares monotonic wall clock intervals (`Date.now()` vs `performance.now()`) to detect and correct device clock shifts or background suspension delays.
+- **Cold Restart & Reboot Recovery (`recoverSession`)**: Evaluates persisted session state against the authoritative deadline; automatically transitions expired sessions to `COMPLETED` and restores active sessions with correct remaining seconds without double-triggering completion events.
+- **Strict Mode Protection**: Rejects `pause()` and `cancel()` calls during active focus unless an explicit emergency protocol is authenticated.
+- **Idempotent Completion**: Guarantees completion events execute once, preventing duplicate analytics or reward double-counting.
 
 ## 4. Cross-Platform Command Lifecycle
 
@@ -151,164 +183,105 @@ The reverse direction uses the same lifecycle; the iOS child adapter
 translates the policy into supported Family Controls / ManagedSettings
 operations.
 
-## 5. Policy Model and Ownership
+## 5. Policy Model, Ownership, and Synchronization Engine (`PolicySyncEngine`)
 
 Every restriction has immutable ownership semantics:
 
--   `PARENT`: only an authorized parent can modify/remove it.
--   `CHILD`: the child can modify/remove their own restriction.
--   A child-owned policy cannot override, cancel, or downgrade a
-    parent-owned policy.
+- `PARENT`: only an authenticated, paired parent can create, modify, or remove it.
+- `CHILD`: the child can only mutate child-owned focus session policies.
+- A child-owned policy cannot override, cancel, or downgrade a parent-owned policy.
 
-The effective restrictions are the union of all applicable parent-owned
-restrictions and child-owned restrictions, subject to supported platform
-semantics and an explicit conflict-resolution order.
+### 5.1 Monotonic Policy Versioning and Stale Rejection
 
-Suggested resolution: 1. Safety/system exclusions and unsupported
-targets are handled explicitly. 2. Active parent-owned deny restrictions
-remain in force. 3. Child-owned restrictions can add additional
-restrictions. 4. Child actions never subtract parent-owned restrictions.
-5. Parent removal creates a new policy version and command; it does not
-silently erase audit history. 6. If a policy is unsupported or partially
-applied, the result is shown as such.
+To protect against race conditions, out-of-order push deliveries, and network replay attacks:
+1. Every policy update increments an integer `policy_version` monotonically at the database layer.
+2. When the child device sync engine (`mobile/src/engine/PolicySyncEngine.ts`) receives a policy:
+   - If `incomingVersion <= localVersion`, the command is rejected as **stale**.
+   - If `incomingVersion > localVersion`, the policy is accepted, applied to local storage, and the local version counter advances.
+3. Durable commands are stored in an indexed queue with idempotency keys (`idempotency_key = <deviceId>_<version>_<timestamp>`).
 
-## 6. Data Model
+### 5.2 Multi-Schedule Priority Hierarchy
 
-Illustrative relational schema. Use UUIDs or equivalent opaque
-identifiers; do not expose sequential IDs.
+When multiple parent and child restriction schedules overlap, the synchronization engine evaluates effective restrictions using an authoritative priority hierarchy:
 
-### `users`
+| Schedule Type | Priority Weight | Rule & Override Behavior |
+| :--- | :---: | :--- |
+| **Bedtime Restriction** | **100** | Night curfew. Overrides study breaks and leisure allowances. |
+| **School / Study Hall** | **80** | Daytime school hours. Enforces academic apps only. |
+| **Study Session** | **50** | Ad-hoc or scheduled session. Blocks distracting apps/categories. |
 
--   `id`
--   `email_or_login_identifier`
--   `auth_provider`
--   `role_preference` (display preference only; not an authorization
-    source)
--   `account_status`
--   `created_at`, `updated_at`
+**Union Rule**: The effective blocked application list is computed as the mathematical union across all active schedules:
+$$\text{Blocked}_{\text{effective}} = \bigcup_{s \in \text{ActiveSchedules}} s.\text{blockedTargets} \cup \text{ParentAlwaysBlocked}$$
+No child session or lower-priority schedule can unblock an application that is denied by an active higher-priority schedule or parent restriction.
 
-### `family_relationships`
+### 5.3 Single-Use Pairing PIN Lifecycle
 
--   `id`
--   `parent_user_id`
--   `child_user_id`
--   `status` (`pending`, `active`, `revoked`)
--   `created_at`, `revoked_at`
+Pairing establishes a cryptographically verifiable parent-child relationship:
 
-### `pairing_invitations`
+```
+[Parent Device]                         [Backend]                       [Child Device]
+       |                                    |                                  |
+       |--- POST /pairing/invitations ----->|                                  |
+       |    (Generate ZEN-XXXX)             |                                  |
+       |<-- Returns PIN (15m expiry) -------|                                  |
+       |                                    |                                  |
+   Displays PIN                             |                              Child enters PIN
+       |                                    |<-- POST /pairing/redeem ---------|
+       |                                    |    Validate PIN, expiry, rate    |
+       |                                    |    Increment attempt_count       |
+       |                                    |    Mark status = 'redeemed'      |
+       |                                    |--- Create family_relationship -->|
+       |<-- Relationship Active Notification|                                  |
+```
 
--   `id`
--   `family_relationship_id`
--   `token_hash`
--   `expires_at`
--   `attempt_count`
--   `status`
--   `created_by`
--   `created_at`
+- **PIN Format**: Human-readable `ZEN-XXXX` (4 uppercase alphanumeric characters).
+- **Strict Expiration**: 15 minutes (`expires_at = now() + 15 min`).
+- **Brute-Force Rate Limiting**: 5 consecutive failed attempts lock the invitation permanently (`status: 'expired'`), preventing automated dictionary attacks.
+- **Single-Use Redemption**: Instantly transitions to `redeemed` upon verification; re-entry of the same PIN is rejected.
+- **Revocation**: Parents can revoke pairing at any time via `DELETE /pairing/devices/{deviceId}`, immediately setting the relationship and device to `revoked`.
 
-### `devices`
+## 6. Data Model and Row Level Security (RLS)
 
--   `id`
--   `user_id`
--   `platform` (`android`, `ios`)
--   `app_version`
--   `os_version`
--   `device_public_key` or equivalent registration proof
--   `authorization_state`
--   `enrollment_state`
--   `capabilities_json`
--   `last_seen_at`
--   `last_policy_sync_at`
--   `status`
+The system utilizes a relational PostgreSQL database (compatible with Supabase) defined in `backend/migrations/001_initial_schema.sql`. All primary identifiers are UUIDv4.
 
-### `restriction_policies`
+### 6.1 Core Tables
 
--   `id`
--   `family_relationship_id`
--   `target_device_id`
--   `owner_type` (`parent`, `child`)
--   `owner_user_id`
--   `policy_type` (`app_block`, `category_block`, `domain_block`,
-    `focus_session`, `notification_focus`)
--   `platform`
--   `target_reference` (platform-specific opaque token/package reference
-    as appropriate)
--   `schedule_id`
--   `desired_state`
--   `version`
--   `status`
--   `created_at`, `updated_at`, `deleted_at`
+1. **`users`**: Platform identity (`id`, `email`, `role`, `created_at`, `updated_at`).
+2. **`family_relationships`**: Links parent to child with status (`pending`, `active`, `revoked`).
+3. **`devices`**: Device registry with platform (`android`, `ios`), `is_device_owner`, `is_accessibility_enabled`, `has_usage_permission`, `protection_active`, `push_token`, and `last_sync_at`.
+4. **`pairing_invitations`**: Expiring 15-minute PIN records (`pin_code`, `parent_user_id`, `expires_at`, `attempt_count`, `status`).
+5. **`restriction_policies`**: Monotonically versioned policies (`owner_type`, `policy_type`, `version`, `target_identifiers`, `schedule_config`, `is_active`).
+6. **`policy_receipts`**: Child device enforcement acknowledgements (`status: applied|partial|failed|unsupported`, `applied_version`, `error_code`, `diagnostic`).
+7. **`focus_sessions`**: Authoritative session persistence (`user_id`, `device_id`, `state`, `focus_duration_minutes`, `break_duration_minutes`, `strict_mode`, `started_at`, `expires_at`, `completed_at`, `drift_compensation_ms`).
+8. **`schedules`**: Recurring restriction time windows (`days_of_week`, `start_time`, `end_time`, `priority`, `blocked_targets`).
+9. **`daily_usage_summaries`**: Daily screen-time totals (`package_name`, `category`, `foreground_minutes`, `date`). Non-fabricated; recorded only with explicit usage access.
+10. **`audit_events`**: Immutable append-only log of security-sensitive operations (`actor_id`, `action`, `target_id`, `payload`, `ip_address`).
 
-### `schedules`
+### 6.2 Row Level Security (RLS) Enforcement
 
--   `id`
--   `timezone`
--   `start_at`, `end_at`
--   `recurrence_rule`
--   `enabled`
--   `created_at`, `updated_at`
+Every table enforces PostgreSQL Row Level Security to prevent unauthorized multi-tenant data access:
 
-### `commands`
-
--   `id`
--   `target_device_id`
--   `policy_id`
--   `policy_version`
--   `command_type`
--   `payload_json`
--   `idempotency_key`
--   `created_at`
--   `expires_at`
--   `delivery_state`
--   `attempt_count`
--   `acknowledged_at`
-
-### `enforcement_receipts`
-
--   `id`
--   `command_id`
--   `device_id`
--   `result` (`applied`, `partial`, `failed`, `unsupported`,
-    `authorization_required`)
--   `platform_error_code`
--   `safe_diagnostic`
--   `reported_at`
-
-### `approval_requests`
-
--   `id`
--   `family_relationship_id`
--   `requester_user_id`
--   `target_device_id`
--   `request_type`
--   `reason`
--   `status` (`pending`, `approved`, `rejected`, `expired`, `cancelled`)
--   `decision_by`
--   `decision_at`
--   `created_at`, `expires_at`
-
-### `audit_events`
-
--   `id`
--   `family_relationship_id`
--   `actor_user_id`
--   `actor_device_id`
--   `event_type`
--   `target_type`, `target_id`
--   `metadata_redacted_json`
--   `created_at`
-
-### `push_tokens`
-
--   `id`
--   `device_id`
--   `platform`
--   `token`
--   `updated_at`
-
-Store only data necessary for the product. Protect platform-specific
-app-selection tokens; do not attempt to translate opaque iOS tokens into
-Android package names.
+- **Parent Data Isolation**:
+  ```sql
+  CREATE POLICY parent_read_children ON users
+      FOR SELECT USING (
+          auth.uid() = id OR
+          EXISTS (SELECT 1 FROM family_relationships WHERE parent_user_id = auth.uid() AND child_user_id = users.id AND status = 'active')
+      );
+  ```
+- **Child Policy Mutation Protection**:
+  ```sql
+  CREATE POLICY child_modify_own_policies_only ON restriction_policies
+      FOR UPDATE USING (
+          (owner_type = 'child' AND owner_user_id = auth.uid()) OR
+          (owner_type = 'parent' AND EXISTS (
+              SELECT 1 FROM family_relationships
+              WHERE parent_user_id = auth.uid() AND child_user_id = restriction_policies.owner_user_id AND status = 'active'
+          ))
+      );
+  ```
+  Children are cryptographically prevented from altering `owner_type = 'parent'` policies.
+- **Device Receipt Ownership**: Child devices may only insert receipts matching their own authenticated `device_id`.
 
 ## 7. API Design
 

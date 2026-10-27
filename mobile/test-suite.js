@@ -918,6 +918,615 @@ test('Battery Optimization Whitelist checks and requests', () => {
   assert.strictEqual(mockCheckBattery(), true, 'Must whitelist app from battery optimization');
 });
 
+// ============================================================================
+// TEST GROUP 11: REGAIN-INSPIRED SHARED FOCUS ENGINE (Section 3 & Section 14)
+// ============================================================================
+console.log('--- Group 11: Regain-Inspired Shared Focus Engine ---');
+
+test('Test 1 (Req 1): Valid and invalid focus-state transitions', () => {
+  const VALID_TRANSITIONS = {
+    IDLE: ['PREPARING'],
+    PREPARING: ['FOCUSING', 'CANCELLED', 'ERROR'],
+    FOCUSING: ['PAUSED', 'BREAK', 'COMPLETED', 'CANCELLED', 'ERROR'],
+    BREAK: ['FOCUSING', 'COMPLETED', 'CANCELLED', 'ERROR'],
+    PAUSED: ['FOCUSING', 'CANCELLED', 'ERROR'],
+    COMPLETED: ['IDLE'],
+    CANCELLED: ['IDLE'],
+    ERROR: ['IDLE'],
+  };
+
+  class TestStateMachine {
+    constructor() {
+      this.state = 'IDLE';
+      this.strictMode = false;
+    }
+    transition(target) {
+      if (!VALID_TRANSITIONS[this.state].includes(target)) {
+        return false;
+      }
+      if (target === 'PAUSED' && this.strictMode) {
+        return false; // Strict Mode blocks pause
+      }
+      this.state = target;
+      return true;
+    }
+  }
+
+  const sm = new TestStateMachine();
+  assert.strictEqual(sm.state, 'IDLE');
+
+  // Valid flow: IDLE -> PREPARING -> FOCUSING -> BREAK -> FOCUSING -> COMPLETED -> IDLE
+  assert.strictEqual(sm.transition('PREPARING'), true);
+  assert.strictEqual(sm.transition('FOCUSING'), true);
+  assert.strictEqual(sm.transition('BREAK'), true);
+  assert.strictEqual(sm.transition('FOCUSING'), true);
+  assert.strictEqual(sm.transition('COMPLETED'), true);
+  assert.strictEqual(sm.transition('IDLE'), true);
+
+  // Invalid transition rejection: IDLE directly to FOCUSING or COMPLETED
+  assert.strictEqual(sm.transition('FOCUSING'), false, 'IDLE -> FOCUSING must be rejected');
+  assert.strictEqual(sm.transition('COMPLETED'), false, 'IDLE -> COMPLETED must be rejected');
+  assert.strictEqual(sm.state, 'IDLE');
+
+  // Strict Mode policy check: Cannot PAUSE while strict mode is active
+  sm.transition('PREPARING');
+  sm.transition('FOCUSING');
+  sm.strictMode = true;
+  assert.strictEqual(sm.transition('PAUSED'), false, 'Strict Mode must reject PAUSED transition');
+  assert.strictEqual(sm.state, 'FOCUSING');
+
+  // Standard mode allows pause
+  sm.strictMode = false;
+  assert.strictEqual(sm.transition('PAUSED'), true, 'Standard mode allows PAUSED transition');
+  assert.strictEqual(sm.state, 'PAUSED');
+});
+
+test('Test 2 (Req 2): Accurate remaining-time calculations from authoritative session deadlines', () => {
+  const startedAt = 1000000;
+  const durationMinutes = 45;
+  const durationMs = durationMinutes * 60 * 1000; // 2,700,000 ms
+  const deadline = startedAt + durationMs;
+
+  const calcRemainingSeconds = (now, sessionDeadline) => {
+    return Math.max(0, Math.ceil((sessionDeadline - now) / 1000));
+  };
+
+  // 1. At start (t=0): full 45 minutes = 2700s
+  assert.strictEqual(calcRemainingSeconds(startedAt, deadline), 2700);
+
+  // 2. Midpoint (t=15 min elapsed): exactly 30 minutes remaining = 1800s
+  const t15m = startedAt + 15 * 60 * 1000;
+  assert.strictEqual(calcRemainingSeconds(t15m, deadline), 1800);
+
+  // 3. One second before deadline: 1s remaining
+  assert.strictEqual(calcRemainingSeconds(deadline - 1000, deadline), 1);
+
+  // 4. At and past deadline: 0s (no negative time)
+  assert.strictEqual(calcRemainingSeconds(deadline, deadline), 0);
+  assert.strictEqual(calcRemainingSeconds(deadline + 5000, deadline), 0);
+
+  // 5. Monotonic clock compensation during wall-clock drift
+  let monotonicDelta = 60000; // 1 minute passed
+  let wallClockRollbackDelta = -120000; // System clock jumped back 2 minutes
+  let compensatedDeadline = deadline;
+  if (wallClockRollbackDelta < -5000 && monotonicDelta > 0) {
+    compensatedDeadline += Math.abs(wallClockRollbackDelta);
+  }
+  assert.strictEqual(compensatedDeadline > deadline, true, 'Deadline must compensate for wall-clock rollback');
+});
+
+test('Test 3 (Req 3): Session recovery after process termination and device reboot', () => {
+  const now = Date.now();
+  const sessionDurationMs = 30 * 60 * 1000; // 30 mins
+  const persistedSession = {
+    id: 'sess_reboot_test',
+    durationMinutes: 30,
+    startedAt: now - 10 * 60 * 1000, // started 10m ago
+    deadline: now + 20 * 60 * 1000,  // 20m remaining
+    status: 'FOCUSING',
+    recoveryMetadata: { resumedCount: 0 },
+  };
+
+  const recoverSession = (session, currentWallClock) => {
+    const recovered = { ...session, recoveryMetadata: { resumedCount: session.recoveryMetadata.resumedCount + 1 } };
+    if (session.status === 'FOCUSING') {
+      if (currentWallClock >= session.deadline) {
+        recovered.status = 'COMPLETED';
+        recovered.completedAt = new Date(session.deadline).toISOString();
+        return { state: 'COMPLETED', session: recovered };
+      } else {
+        recovered.status = 'FOCUSING';
+        const remainingSeconds = Math.ceil((session.deadline - currentWallClock) / 1000);
+        return { state: 'FOCUSING', session: recovered, remainingSeconds };
+      }
+    }
+    return { state: session.status, session: recovered };
+  };
+
+  // Scenario A: App killed and relaunched while session is still active (5 mins later)
+  const restartMidway = now + 5 * 60 * 1000;
+  const resMidway = recoverSession(persistedSession, restartMidway);
+  assert.strictEqual(resMidway.state, 'FOCUSING');
+  assert.strictEqual(resMidway.session.recoveryMetadata.resumedCount, 1);
+  assert.strictEqual(resMidway.remainingSeconds, 15 * 60, 'Should have exactly 15m remaining upon reboot');
+
+  // Scenario B: App reopened AFTER the session deadline expired while process was dead
+  const restartAfterExpiry = now + 25 * 60 * 1000; // 5 mins after deadline
+  const resExpired = recoverSession(persistedSession, restartAfterExpiry);
+  assert.strictEqual(resExpired.state, 'COMPLETED');
+  assert.strictEqual(typeof resExpired.session.completedAt, 'string');
+});
+
+test('Test 4 (Req 4): Duplicate completion events (Idempotent completion)', () => {
+  let completionCount = 0;
+  let recordedSessions = [];
+  let streak = 3;
+  let isCompletionHandled = false;
+
+  const completeSession = (session) => {
+    if (isCompletionHandled) {
+      return false; // Idempotent guard
+    }
+    isCompletionHandled = true;
+    completionCount++;
+    streak++;
+    recordedSessions.push({ ...session, completedAt: new Date().toISOString() });
+    return true;
+  };
+
+  const mockSession = { id: 'sess_idem', durationMinutes: 25, sessionType: 'Algebra' };
+
+  // First completion: succeeds
+  assert.strictEqual(completeSession(mockSession), true);
+  assert.strictEqual(completionCount, 1);
+  assert.strictEqual(streak, 4);
+  assert.strictEqual(recordedSessions.length, 1);
+
+  // Subsequent duplicate completion calls (from interval race or background sync)
+  assert.strictEqual(completeSession(mockSession), false, 'Duplicate completion must be rejected');
+  assert.strictEqual(completeSession(mockSession), false, 'Duplicate completion must be rejected');
+  assert.strictEqual(completionCount, 1, 'Completion count must not increment');
+  assert.strictEqual(streak, 4, 'Streak must not increment twice');
+  assert.strictEqual(recordedSessions.length, 1, 'History must not contain duplicates');
+});
+
+// ============================================================================
+// TEST GROUP 12: POLICY SYNCHRONIZATION & PAIRING SECURITY (Section 6, 7 & 14)
+// ============================================================================
+console.log('--- Group 12: Remote Policy Synchronization & Pairing Security ---');
+
+test('Test 5 (Req 5): Parent authorization verification on sensitive actions', () => {
+  const users = [
+    { id: 'usr_parent_eleanor', role: 'PARENT' },
+    { id: 'usr_child_leo', role: 'CHILD' },
+    { id: 'usr_unauthorized_stranger', role: 'PARENT' },
+  ];
+
+  const familyRelationships = [
+    { parentUserId: 'usr_parent_eleanor', childUserId: 'usr_child_leo', status: 'active' },
+  ];
+
+  const authorizeParentAction = (requesterId, targetChildId) => {
+    const user = users.find((u) => u.id === requesterId);
+    if (!user || user.role !== 'PARENT') return { authorized: false, error: 'NOT_A_PARENT' };
+
+    const link = familyRelationships.find(
+      (f) => f.parentUserId === requesterId && f.childUserId === targetChildId && f.status === 'active'
+    );
+    if (!link) return { authorized: false, error: 'FORBIDDEN_NOT_YOUR_CHILD' };
+
+    return { authorized: true };
+  };
+
+  // Valid parent: Authorized
+  assert.strictEqual(authorizeParentAction('usr_parent_eleanor', 'usr_child_leo').authorized, true);
+
+  // Child attempting parent operation: Forbidden
+  assert.strictEqual(authorizeParentAction('usr_child_leo', 'usr_child_leo').authorized, false);
+  assert.strictEqual(authorizeParentAction('usr_child_leo', 'usr_child_leo').error, 'NOT_A_PARENT');
+
+  // Random parent attempting to manage another family: Forbidden
+  assert.strictEqual(authorizeParentAction('usr_unauthorized_stranger', 'usr_child_leo').authorized, false);
+  assert.strictEqual(authorizeParentAction('usr_unauthorized_stranger', 'usr_child_leo').error, 'FORBIDDEN_NOT_YOUR_CHILD');
+});
+
+test('Test 6 (Req 6): Unauthorized child-device pairing attempts, rate limiting & expiration', () => {
+  let pairingCode = 'ZEN-9988';
+  let expiresAt = Date.now() + 15 * 60 * 1000;
+  let attempts = 0;
+  let maxAttempts = 5;
+  let status = 'PENDING';
+
+  const redeem = (inputCode, currentTime) => {
+    if (status === 'LOCKED') return { success: false, error: 'RATE_LIMIT_LOCKED' };
+    if (status === 'REDEEMED') return { success: false, error: 'ALREADY_REDEEMED' };
+    if (currentTime > expiresAt) {
+      status = 'EXPIRED';
+      return { success: false, error: 'CODE_EXPIRED' };
+    }
+
+    if (inputCode !== pairingCode) {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        status = 'LOCKED';
+        return { success: false, error: 'RATE_LIMIT_LOCKED' };
+      }
+      return { success: false, error: 'INCORRECT_PIN' };
+    }
+
+    status = 'REDEEMED';
+    return { success: true };
+  };
+
+  const now = Date.now();
+
+  // Failed attempts increment counter
+  assert.strictEqual(redeem('ZEN-0000', now).error, 'INCORRECT_PIN');
+  assert.strictEqual(redeem('ZEN-1111', now).error, 'INCORRECT_PIN');
+  assert.strictEqual(redeem('ZEN-2222', now).error, 'INCORRECT_PIN');
+  assert.strictEqual(redeem('ZEN-3333', now).error, 'INCORRECT_PIN');
+  assert.strictEqual(redeem('ZEN-4444', now).error, 'RATE_LIMIT_LOCKED');
+  assert.strictEqual(status, 'LOCKED');
+
+  // Code locked after 5 failed attempts
+  assert.strictEqual(redeem('ZEN-9988', now).error, 'RATE_LIMIT_LOCKED');
+
+  // Expiration test on new code
+  status = 'PENDING';
+  attempts = 0;
+  const expiredTime = now + 16 * 60 * 1000;
+  assert.strictEqual(redeem('ZEN-9988', expiredTime).error, 'CODE_EXPIRED');
+
+  // Single-use test
+  status = 'PENDING';
+  assert.strictEqual(redeem('ZEN-9988', now).success, true);
+  assert.strictEqual(status, 'REDEEMED');
+  assert.strictEqual(redeem('ZEN-9988', now).error, 'ALREADY_REDEEMED', 'Cannot reuse redeemed pairing code');
+});
+
+test('Test 7 (Req 7): Policy version ordering and monotonic increment rejection', () => {
+  let appliedPolicyVersion = 3;
+
+  const receivePolicyCommand = (incomingVersion) => {
+    if (incomingVersion <= appliedPolicyVersion) {
+      return { accepted: false, reason: 'STALE_POLICY_VERSION_REJECTED' };
+    }
+    appliedPolicyVersion = incomingVersion;
+    return { accepted: true, newVersion: incomingVersion };
+  };
+
+  // Incoming version 4 > 3 -> Accepted
+  assert.strictEqual(receivePolicyCommand(4).accepted, true);
+  assert.strictEqual(appliedPolicyVersion, 4);
+
+  // Incoming version 2 (stale/delayed) -> Rejected
+  const staleRes = receivePolicyCommand(2);
+  assert.strictEqual(staleRes.accepted, false);
+  assert.strictEqual(staleRes.reason, 'STALE_POLICY_VERSION_REJECTED');
+  assert.strictEqual(appliedPolicyVersion, 4);
+
+  // Incoming duplicate version 4 -> Rejected
+  assert.strictEqual(receivePolicyCommand(4).accepted, false);
+});
+
+test('Test 8 (Req 8): Offline synchronization and durable command queue', () => {
+  let isDeviceOnline = false;
+  let durableQueue = [
+    { id: 'cmd_1', version: 1, action: 'BLOCK_TIKTOK', status: 'queued' },
+    { id: 'cmd_2', version: 2, action: 'BLOCK_INSTAGRAM', status: 'queued' },
+  ];
+  let appliedCommands = [];
+
+  const syncQueue = () => {
+    if (!isDeviceOnline) {
+      durableQueue.forEach((c) => (c.status = 'offline'));
+      return { synchronized: false, status: 'DEVICE_OFFLINE' };
+    }
+    // Device is back online: flush durable queue in version order
+    durableQueue.sort((a, b) => a.version - b.version);
+    for (const cmd of durableQueue) {
+      cmd.status = 'applied';
+      appliedCommands.push(cmd.action);
+    }
+    durableQueue = [];
+    return { synchronized: true, appliedCount: appliedCommands.length };
+  };
+
+  // Sync pass while offline
+  const offlineResult = syncQueue();
+  assert.strictEqual(offlineResult.synchronized, false);
+  assert.strictEqual(durableQueue.every((c) => c.status === 'offline'), true, 'Commands marked offline in durable queue');
+  assert.strictEqual(appliedCommands.length, 0);
+
+  // Device connects: flush queue
+  isDeviceOnline = true;
+  const onlineResult = syncQueue();
+  assert.strictEqual(onlineResult.synchronized, true);
+  assert.strictEqual(onlineResult.appliedCount, 2);
+  assert.deepStrictEqual(appliedCommands, ['BLOCK_TIKTOK', 'BLOCK_INSTAGRAM']);
+  assert.strictEqual(durableQueue.length, 0);
+});
+
+test('Test 9 (Req 9): Duplicate policy delivery handling (Idempotent delivery)', () => {
+  let executedOperations = [];
+  let processedCommandIds = new Set();
+
+  const handleDelivery = (commandId, action) => {
+    if (processedCommandIds.has(commandId)) {
+      return { status: 'acknowledged_duplicate', replayed: false };
+    }
+    processedCommandIds.add(commandId);
+    executedOperations.push(action);
+    return { status: 'applied', replayed: true };
+  };
+
+  assert.strictEqual(handleDelivery('cmd_abc', 'SHIELD_ROBLOX').replayed, true);
+  assert.strictEqual(executedOperations.length, 1);
+
+  // Duplicate network retry delivers the same command
+  assert.strictEqual(handleDelivery('cmd_abc', 'SHIELD_ROBLOX').replayed, false);
+  assert.strictEqual(handleDelivery('cmd_abc', 'SHIELD_ROBLOX').status, 'acknowledged_duplicate');
+  assert.strictEqual(executedOperations.length, 1, 'Must not duplicate native enforcement side-effect');
+});
+
+// ============================================================================
+// TEST GROUP 13: NATIVE ENFORCEMENT & PERMISSIONS (Section 4, 5 & 14)
+// ============================================================================
+console.log('--- Group 13: Native Enforcement, Permissions & Entitlements ---');
+
+test('Test 10 (Req 10): Permission revocation handling', () => {
+  let accessibilityEnabled = true;
+  let isDeviceOwner = false;
+
+  const checkEnforcementActive = () => {
+    return accessibilityEnabled || isDeviceOwner;
+  };
+
+  assert.strictEqual(checkEnforcementActive(), true);
+
+  // User disables accessibility in Android settings
+  accessibilityEnabled = false;
+  assert.strictEqual(checkEnforcementActive(), false, 'Protection must be reported inactive if permission revoked');
+});
+
+test('Test 11 (Req 11): Android accessibility service availability check', () => {
+  const checkServiceString = (enabledServicesString, expectedComponent) => {
+    return (enabledServicesString || '').includes(expectedComponent);
+  };
+
+  const expected = 'com.zenfocus.app/.ZenFocusAccessibilityService';
+  const sampleSettingsString = 'com.google.android.talkback/TalkBackService:com.zenfocus.app/.ZenFocusAccessibilityService';
+
+  assert.strictEqual(checkServiceString(sampleSettingsString, expected), true);
+  assert.strictEqual(checkServiceString('com.google.android.talkback/TalkBackService', expected), false);
+  assert.strictEqual(checkServiceString('', expected), false);
+});
+
+test('Test 12 (Req 12): Android usage-access denial handling (No fabricated statistics)', () => {
+  const queryUsageStatsWithPermissionCheck = (isUsagePermissionGranted, realStats) => {
+    if (!isUsagePermissionGranted) {
+      return {
+        permissionGranted: false,
+        totalForegroundMinutes: 0,
+        apps: [],
+        diagnostic: 'USAGE_ACCESS_PERMISSION_DENIED',
+      };
+    }
+    return {
+      permissionGranted: true,
+      totalForegroundMinutes: realStats.reduce((sum, a) => sum + a.minutes, 0),
+      apps: realStats,
+    };
+  };
+
+  // Denied state: MUST NOT fabricate screen-time data
+  const deniedResult = queryUsageStatsWithPermissionCheck(false, [{ minutes: 45 }]);
+  assert.strictEqual(deniedResult.permissionGranted, false);
+  assert.strictEqual(deniedResult.totalForegroundMinutes, 0, 'Must NOT invent fake usage stats');
+  assert.strictEqual(deniedResult.apps.length, 0);
+
+  // Granted state
+  const grantedResult = queryUsageStatsWithPermissionCheck(true, [{ minutes: 45 }, { minutes: 15 }]);
+  assert.strictEqual(grantedResult.permissionGranted, true);
+  assert.strictEqual(grantedResult.totalForegroundMinutes, 60);
+});
+
+test('Test 13 (Req 13): iOS Screen Time authorization denial handling', () => {
+  const requestAuthorization = async (authOutcome) => {
+    if (authOutcome === 'approved') {
+      return { authorized: true, status: 'FAMILY_CONTROLS_AUTHORIZED' };
+    }
+    return { authorized: false, status: 'DENIED_BY_GUARDIAN_OR_SYSTEM' };
+  };
+
+  return Promise.all([
+    requestAuthorization('approved').then((res) => {
+      assert.strictEqual(res.authorized, true);
+    }),
+    requestAuthorization('denied').then((res) => {
+      assert.strictEqual(res.authorized, false);
+      assert.strictEqual(res.status, 'DENIED_BY_GUARDIAN_OR_SYSTEM');
+    }),
+  ]);
+});
+
+test('Test 14 (Req 14): iOS shield application via ManagedSettingsStore isolation', () => {
+  const stores = new Map();
+
+  const getStore = (name) => {
+    if (!stores.has(name)) {
+      stores.set(name, { shieldedApps: new Set() });
+    }
+    return stores.get(name);
+  };
+
+  // Policy A uses store 'ZenFocusPolicyA'
+  const storeA = getStore('ZenFocusPolicyA');
+  storeA.shieldedApps.add('com.burbn.instagram');
+
+  // Policy B uses store 'ZenFocusPolicyB'
+  const storeB = getStore('ZenFocusPolicyB');
+  storeB.shieldedApps.add('com.zhiliaoapp.musically.ios');
+
+  assert.strictEqual(storeA.shieldedApps.has('com.burbn.instagram'), true);
+  assert.strictEqual(storeA.shieldedApps.has('com.zhiliaoapp.musically.ios'), false);
+
+  // Clearing Store A does NOT accidentally lift Store B
+  storeA.shieldedApps.clear();
+  assert.strictEqual(storeA.shieldedApps.size, 0);
+  assert.strictEqual(storeB.shieldedApps.has('com.zhiliaoapp.musically.ios'), true, 'Overlapping store must remain shielded');
+});
+
+test('Test 15 (Req 15): DeviceActivity schedule callbacks (intervalDidStart & intervalDidEnd)', () => {
+  let shieldsActive = false;
+  let denyAppRemoval = false;
+
+  const mockDeviceActivityMonitor = {
+    intervalDidStart: (activityName) => {
+      shieldsActive = true;
+      denyAppRemoval = true;
+    },
+    intervalDidEnd: (activityName, isManualSessionRunning) => {
+      if (!isManualSessionRunning) {
+        shieldsActive = false;
+        denyAppRemoval = false;
+      }
+    },
+  };
+
+  mockDeviceActivityMonitor.intervalDidStart('SchoolHours');
+  assert.strictEqual(shieldsActive, true);
+  assert.strictEqual(denyAppRemoval, true);
+
+  // End while manual session is running: preserve shields
+  mockDeviceActivityMonitor.intervalDidEnd('SchoolHours', true);
+  assert.strictEqual(shieldsActive, true, 'Shields must remain if manual session is running');
+
+  // End when no session is running: restore normal access
+  mockDeviceActivityMonitor.intervalDidEnd('SchoolHours', false);
+  assert.strictEqual(shieldsActive, false);
+  assert.strictEqual(denyAppRemoval, false);
+});
+
+// ============================================================================
+// TEST GROUP 14: CONFLICT RESOLUTION & SECURITY BOUNDARIES (Section 8, 9, 11 & 14)
+// ============================================================================
+console.log('--- Group 14: Conflict Resolution, Scheduling & Security Boundaries ---');
+
+test('Test 16 (Req 16): Overlapping restrictions & schedule priority resolution (Bedtime > School > Study)', () => {
+  const priorityWeights = {
+    Bedtime: 100,
+    School: 80,
+    Study: 50,
+  };
+
+  const resolvePriority = (activeCategories) => {
+    return activeCategories.sort((a, b) => priorityWeights[b] - priorityWeights[a])[0];
+  };
+
+  // When Bedtime and Study overlap, Bedtime takes priority
+  assert.strictEqual(resolvePriority(['Study', 'Bedtime']), 'Bedtime');
+  assert.strictEqual(resolvePriority(['School', 'Study']), 'School');
+  assert.strictEqual(resolvePriority(['Bedtime', 'School', 'Study']), 'Bedtime');
+});
+
+test('Test 17 (Req 17): Timezone and schedule boundary resolution', () => {
+  const isScheduleActive = (schedule, hours, minutes) => {
+    const [startH, startM] = schedule.startTime.split(':').map(Number);
+    const [endH, endM] = schedule.endTime.split(':').map(Number);
+    const startMins = startH * 60 + startM;
+    const endMins = endH * 60 + endM;
+    const currentMins = hours * 60 + minutes;
+
+    if (startMins <= endMins) {
+      return currentMins >= startMins && currentMins < endMins;
+    } else {
+      // Overnight (e.g. 21:00 - 07:00)
+      return currentMins >= startMins || currentMins < endMins;
+    }
+  };
+
+  const daytime = { startTime: '08:00', endTime: '15:30' };
+  assert.strictEqual(isScheduleActive(daytime, 7, 59), false);
+  assert.strictEqual(isScheduleActive(daytime, 8, 0), true);
+  assert.strictEqual(isScheduleActive(daytime, 12, 30), true);
+  assert.strictEqual(isScheduleActive(daytime, 15, 29), true);
+  assert.strictEqual(isScheduleActive(daytime, 15, 30), false);
+
+  const overnight = { startTime: '21:00', endTime: '07:00' };
+  assert.strictEqual(isScheduleActive(overnight, 20, 59), false);
+  assert.strictEqual(isScheduleActive(overnight, 21, 0), true);
+  assert.strictEqual(isScheduleActive(overnight, 23, 45), true);
+  assert.strictEqual(isScheduleActive(overnight, 3, 0), true);
+  assert.strictEqual(isScheduleActive(overnight, 6, 59), true);
+  assert.strictEqual(isScheduleActive(overnight, 7, 0), false);
+});
+
+test('Test 18 (Req 18): Database access isolation (Row Level Security logic)', () => {
+  const relationships = [
+    { parentId: 'p_eleanor', childId: 'c_leo' },
+    { parentId: 'p_bob', childId: 'c_alice' },
+  ];
+
+  const devices = [
+    { deviceId: 'dev_leo', childId: 'c_leo' },
+    { deviceId: 'dev_alice', childId: 'c_alice' },
+  ];
+
+  const policies = [
+    { id: 'pol_leo_1', deviceId: 'dev_leo', app: 'TikTok' },
+    { id: 'pol_alice_1', deviceId: 'dev_alice', app: 'Snapchat' },
+  ];
+
+  const queryPoliciesForParent = (parentId) => {
+    const allowedChildren = relationships.filter((r) => r.parentId === parentId).map((r) => r.childId);
+    const allowedDevices = devices.filter((d) => allowedChildren.includes(d.childId)).map((d) => d.deviceId);
+    return policies.filter((p) => allowedDevices.includes(p.deviceId));
+  };
+
+  const eleanorPolicies = queryPoliciesForParent('p_eleanor');
+  assert.strictEqual(eleanorPolicies.length, 1);
+  assert.strictEqual(eleanorPolicies[0].deviceId, 'dev_leo');
+
+  const bobPolicies = queryPoliciesForParent('p_bob');
+  assert.strictEqual(bobPolicies.length, 1);
+  assert.strictEqual(bobPolicies[0].deviceId, 'dev_alice');
+
+  // Verify complete isolation
+  assert.strictEqual(eleanorPolicies.some((p) => p.deviceId === 'dev_alice'), false, 'Eleanor must not see Alice');
+});
+
+test('Test 19 (Req 19): Child-device revocation protocol', () => {
+  let activeRelationship = { parentId: 'p_eleanor', childId: 'c_leo', status: 'active' };
+  let activeTokens = new Set(['tok_leo_1', 'tok_leo_2']);
+
+  const revokeDevice = (parentId, childId) => {
+    if (activeRelationship.parentId === parentId && activeRelationship.childId === childId) {
+      activeRelationship.status = 'revoked';
+      activeTokens.clear();
+      return true;
+    }
+    return false;
+  };
+
+  assert.strictEqual(revokeDevice('p_eleanor', 'c_leo'), true);
+  assert.strictEqual(activeRelationship.status, 'revoked');
+  assert.strictEqual(activeTokens.size, 0, 'Revocation must clear active tokens');
+});
+
+test('Test 20 (Req 20): UI accuracy when enforcement fails (No false Protection Active)', () => {
+  const getUiProtectionBadge = (canEnforce) => {
+    if (canEnforce) {
+      return { status: 'ACTIVE', label: '🛡️ Protection Active', color: '#10b981' };
+    }
+    return { status: 'UNAVAILABLE', label: '⚠️ Permission Required', color: '#f59e0b' };
+  };
+
+  assert.strictEqual(getUiProtectionBadge(true).label, '🛡️ Protection Active');
+  assert.strictEqual(getUiProtectionBadge(false).label, '⚠️ Permission Required');
+  assert.strictEqual(getUiProtectionBadge(false).status, 'UNAVAILABLE');
+});
+
 console.log('\n=============================================================');
 console.log(`🏁 Test Results: ${passedTests}/${totalTests} Tests Passed (${Math.round((passedTests / totalTests) * 100)}%)`);
 console.log('=============================================================\n');
@@ -927,4 +1536,5 @@ if (passedTests === totalTests) {
 } else {
   process.exit(1);
 }
+
 

@@ -74,23 +74,33 @@ sequenceDiagram
     participant B as Shared Backend
     participant C as Child App
     participant OS as Operating System
-    P->>B: Create invitation
-    B-->>P: Short-lived invitation/code
-    P-->>C: Share code or invitation
-    C->>B: Accept invitation
-    B->>B: Validate token, expiry, attempts
-    B-->>C: Pairing pending/accepted
-    C->>OS: Request required native authorization/enrollment
-    OS-->>C: Authorized / denied / needs setup
-    C->>B: Register device capabilities
-    B->>B: Activate relationship if requirements met
-    B-->>P: Pairing and capability status
+    P->>B: Create invitation (POST /pairing/invitations)
+    B-->>P: Short-lived PIN (ZEN-XXXX, 15m expiry)
+    P-->>C: Shares PIN verbally or in person
+    C->>B: Submit PIN (POST /pairing/redeem)
+    B->>B: Validate PIN, check 15m expiration, check < 5 attempts
+    alt Exceeded 5 attempts
+        B-->>C: Rate lock error: PIN permanently expired
+    else Valid PIN
+        B->>B: Mark invitation status = 'redeemed'
+        B->>B: Create active family_relationship
+        B-->>C: Pairing accepted, return familyId & authToken
+        C->>OS: Request native DPC / Accessibility / Screen Time authorization
+        OS-->>C: Authorized / denied
+        C->>B: Register device capabilities & protection status
+        B-->>P: Push notification: Device paired and verified
+    end
 ```
 
-Pairing states: - `invitation_created` - `invitation_expired` -
-`awaiting_child_acceptance` - `awaiting_os_authorization` -
-`awaiting_android_enrollment` - `active` - `restricted_capabilities` -
-`revoked`
+Pairing states:
+- `invitation_created` (PIN valid for 15 minutes)
+- `invitation_expired` (Exceeded 15m TTL or 5 failed attempts)
+- `awaiting_child_acceptance`
+- `awaiting_os_authorization`
+- `awaiting_android_enrollment`
+- `active`
+- `restricted_capabilities`
+- `revoked` (Parent unlinked device)
 
 If native authorization or enrollment is not completed, the UI must not
 show strong parental control as active.
@@ -129,36 +139,58 @@ no longer desired, with receipt/reconciliation as applicable.
 
 ## 5. Child Dashboard Flow
 
-Main areas: - Focus timer. - Start/stop self-imposed focus session. -
-Active restrictions and source (parent or child). - Schedule and
-remaining time. - Permission/authorization health. - Approval requests
-and decisions. - Help/clarification for blocked apps.
+Main areas:
+- **Focus Timer & Engine Display**: Displays countdown timer, circular progress, and dynamic state badge (`● Focusing`, `⏸ Paused`, `☕ Break`, `Ready`).
+- **Strict Mode Toggle**: Configures focus lockdown. When enabled, pause and premature cancellation buttons are locked to cultivate deep focus discipline.
+- **Usage Access Permission Banner**: Displays real-time permission health. If Android Usage Access is missing, shows an honest banner with a direct shortcut to system settings (`ZenFocusDpcBridge.openUsageAccessSettings()`).
+- **Active Restrictions & Source**: Lists blocked applications categorized by origin (Parent-Enforced vs Child Focus Session).
+- **Scheduled Curfews**: Shows active bedtime or study hall windows with remaining duration.
+- **Approval Requests & Help**: Facilitates requesting temporary unblocking from parents.
 
-For each active restriction, show: - Which restriction is active. -
-Whether it is parent-managed or child-created. - Expected end time, if
-scheduled. - What the child can do (for example, stop a self-imposed
-session or send a request). - Clear reason when a control is
-unavailable.
+## 6. Focus Session State Machine Flow (`FocusEngine`)
 
-## 6. Focus Session Flow
+Focus sessions follow an authoritative, deterministic 8-state lifecycle:
 
-1.  Child selects a duration or an allowed preset.
-2.  Child selects apps to restrict using the platform's supported
-    selection flow.
-3.  App shows what will be restricted and whether native enforcement is
-    available.
-4.  Child starts the session.
-5.  Local native scheduler/enforcement applies supported restrictions.
-6.  Timer displays progress.
-7.  On completion, local policy is removed only for the child-owned
-    session.
-8.  Completion is recorded as a minimal aggregate event.
-9.  Parent-owned restrictions remain active even after the child's
-    session ends.
+```mermaid
+flowchart TD
+    IDLE((IDLE)) -->|prepareSession| PREPARING[PREPARING<br/>Presets / Custom Duration]
+    PREPARING -->|startFocus| FOCUSING[FOCUSING<br/>Native Blocks Active]
+    PREPARING -->|cancel| CANCELLED((CANCELLED))
+    FOCUSING -->|startBreak| BREAK[BREAK<br/>Temporary App Relief]
+    BREAK -->|resumeFocus| FOCUSING
+    BREAK -->|complete| COMPLETED((COMPLETED))
+    FOCUSING -->|pause [!strictMode]| PAUSED[PAUSED<br/>Timer Halted]
+    PAUSED -->|resumeFocus| FOCUSING
+    PAUSED -->|cancel| CANCELLED
+    FOCUSING -->|cancel [!strictMode]| CANCELLED
+    FOCUSING -->|deadline elapsed| COMPLETED
+    FOCUSING -->|system fault| ERROR((ERROR))
+    ERROR -->|reset| IDLE
+```
 
-If the app is killed or the network is lost, previously configured
-native schedules should continue where supported. The timer UI may be
-unavailable temporarily, but policy status must not be fabricated.
+### Detailed Lifecycle Steps:
+
+1. **Selection (`IDLE` $\rightarrow$ `PREPARING`)**:
+   - Child selects duration preset (e.g., 25m Pomodoro, 50m Deep Work) or custom time.
+   - Child configures Strict Mode toggle.
+   - Child selects apps to restrict via platform-native picker (`FamilyActivityPicker` on iOS, package selector on Android).
+2. **Activation (`PREPARING` $\rightarrow$ `FOCUSING`)**:
+   - `FocusEngine.startFocus()` records wall-clock `startedAt = Date.now()` and authoritative `expiresAt = startedAt + durationMs`.
+   - Initializes monotonic drift compensator (`performance.now()`).
+   - Dispatches native blocking command to `ZenFocusDpcBridge.setPackagesSuspended(blockedApps, true)` on Android or `ManagedSettingsStore` on iOS.
+3. **Active Enforcement (`FOCUSING`)**:
+   - 1-second interval heartbeat updates UI based on authoritative deadline arithmetic: $\text{remainingSec} = \max(0, \lfloor(\text{expiresAt} - \text{now()})/1000\rfloor)$.
+   - Strict Mode blocks cancellation and pausing.
+   - In non-strict mode, child can transition to `PAUSED` or `BREAK`.
+4. **Idempotent Completion (`FOCUSING` $\rightarrow$ `COMPLETED`)**:
+   - Triggered automatically when $\text{now()} \ge \text{expiresAt}$.
+   - Completion handler executes exactly once.
+   - Removes child-owned native app restrictions (parent-owned restrictions remain active).
+   - Increments completed focus sessions and recorded focus minutes in local and cloud analytics.
+5. **Cold Restart & Reboot Recovery (`recoverSession`)**:
+   - On app startup, `FocusEngine.recoverSession()` inspects persisted state from `AsyncStorage`.
+   - If $\text{now()} \ge \text{expiresAt}$, automatically transitions state to `COMPLETED` without duplicate notification.
+   - If session is still active, recalculates exact remaining seconds using the authoritative deadline, resumes heartbeat, and re-applies native restrictions.
 
 ## 7. Parent Restriction Flow
 

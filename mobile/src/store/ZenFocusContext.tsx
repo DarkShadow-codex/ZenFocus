@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -20,6 +20,8 @@ import {
   ScannedApp,
   ScanResult,
 } from '../types';
+import { FocusEngine, FocusState, FocusSessionMetadata } from '../engine/FocusEngine';
+import { PolicySyncEngine } from '../engine/PolicySyncEngine';
 import { ZenFocusDpc } from '../native/ZenFocusDpcBridge';
 import { ZenFocusIos } from '../native/ZenFocusIosBridge';
 import { ZenFocusNative } from '../native/ZenFocusNativeBridge';
@@ -450,11 +452,27 @@ interface ZenFocusContextType {
   startTimer: () => void;
   pauseTimer: () => void;
   resetTimer: () => void;
+
+  // Focus Engine & Strict Mode
+  focusState: FocusState;
+  strictMode: boolean;
+  toggleStrictMode: (enabled: boolean) => void;
+
+  // Screen Time & Usage Stats
+  hasUsageStatsPermission: boolean;
+  openUsageAccessSettings: () => Promise<boolean>;
+  queryUsageStats: () => Promise<any>;
 }
 
 const ZenFocusContext = createContext<ZenFocusContextType | undefined>(undefined);
 
 export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const focusEngine = useRef(new FocusEngine()).current;
+  const policySyncEngine = useRef(new PolicySyncEngine(DEFAULT_POLICIES)).current;
+  const [focusState, setFocusState] = useState<FocusState>('IDLE');
+  const [strictMode, setStrictMode] = useState<boolean>(false);
+  const [hasUsageStatsPermission, setHasUsageStatsPermission] = useState<boolean>(true);
+
   const [account, setAccount] = useState<UserAccount | null>(null);
   const [activeView, setActiveViewState] = useState<'CHILD' | 'PARENT'>('CHILD');
   const [activeParentTab, setActiveParentTab] = useState<ParentTab>('DASHBOARD');
@@ -876,42 +894,69 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     streakDays: 4,
   });
 
-  // Load capabilities from both native engines on mount
+  // Load capabilities & usage permissions from both native engines on mount
   useEffect(() => {
     ZenFocusDpc.getCapabilities().then(setAndroidCapabilities);
     ZenFocusIos.getCapabilities().then(setIosCapabilities);
+    ZenFocusDpc.hasUsageStatsPermission().then(setHasUsageStatsPermission);
     loadPersistedData();
   }, []);
 
-  // Timer interval effect
+  // Subscribe to FocusEngine state changes and idempotent completions
+  useEffect(() => {
+    const unsub = focusEngine.subscribe((state, sess) => {
+      setFocusState(state);
+      if (sess) {
+        setTimer((prev) => ({
+          ...prev,
+          totalSeconds: sess.durationMinutes * 60,
+          remainingSeconds: focusEngine.getRemainingSeconds(),
+          isRunning: state === 'FOCUSING',
+          sessionName: sess.sessionType,
+        }));
+      }
+    });
+
+    const unsubCompleted = focusEngine.onCompleted((sess) => {
+      ZenFocusNative.stopStudySession();
+      const completedMins = sess.durationMinutes;
+      setLastCompletedMinutes(completedMins);
+      setIsCelebrationOpen(true);
+      const newSess: CompletedSession = {
+        id: `sess_${Date.now()}`,
+        durationMinutes: completedMins,
+        completedAt: new Date().toISOString(),
+        sessionType: sess.sessionType,
+      };
+      setStudyHistory((hist) => [newSess, ...hist]);
+      setTimer((prev) => ({
+        ...prev,
+        remainingSeconds: 0,
+        isRunning: false,
+        streakDays: prev.streakDays + 1,
+      }));
+      AsyncStorage.removeItem('zenfocus_active_session').catch(console.error);
+    });
+
+    return () => {
+      unsub();
+      unsubCompleted();
+    };
+  }, []);
+
+  // Authoritative deadline-based 1s heartbeat timer
   useEffect(() => {
     let interval: any = null;
     if (timer.isRunning) {
       interval = setInterval(() => {
-        setTimer((prev) => {
-          if (prev.remainingSeconds <= 1) {
-            clearInterval(interval);
-            ZenFocusNative.stopStudySession();
-            const completedMins = Math.max(1, Math.round(prev.totalSeconds / 60));
-            setLastCompletedMinutes(completedMins);
-            setIsCelebrationOpen(true);
-            const sessionType = prev.sessionName || (completedMins >= 60 ? 'Mastery Study Flow' : 'Deep Work Session');
-            const newSess: CompletedSession = {
-              id: `sess_${Date.now()}`,
-              durationMinutes: completedMins,
-              completedAt: new Date().toISOString(),
-              sessionType,
-            };
-            setStudyHistory((hist) => [newSess, ...hist]);
-            return {
-              ...prev,
-              remainingSeconds: 0,
-              isRunning: false,
-              streakDays: prev.streakDays + 1,
-            };
-          }
-          return { ...prev, remainingSeconds: prev.remainingSeconds - 1 };
-        });
+        const state = focusEngine.heartbeat();
+        const remaining = focusEngine.getRemainingSeconds();
+        if (state === 'COMPLETED' || remaining <= 0) {
+          clearInterval(interval);
+          focusEngine.completeSession();
+        } else {
+          setTimer((prev) => ({ ...prev, remainingSeconds: remaining }));
+        }
       }, 1000);
     }
     return () => {
@@ -963,6 +1008,44 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             }
           }
         } catch (_) {}
+      }
+
+      // Load saved strict mode setting
+      const savedStrictMode = await AsyncStorage.getItem('zenfocus_strict_mode');
+      if (savedStrictMode) {
+        setStrictMode(JSON.parse(savedStrictMode));
+      }
+
+      // Recover active session across app kills/reboots
+      const savedActiveSessionStr = await AsyncStorage.getItem('zenfocus_active_session');
+      if (savedActiveSessionStr) {
+        try {
+          const parsedSession = JSON.parse(savedActiveSessionStr) as FocusSessionMetadata;
+          const recovered = focusEngine.recoverSession(parsedSession);
+          if (recovered === 'COMPLETED') {
+            const completedMins = parsedSession.durationMinutes;
+            setLastCompletedMinutes(completedMins);
+            setIsCelebrationOpen(true);
+            const newSess: CompletedSession = {
+              id: `sess_${Date.now()}`,
+              durationMinutes: completedMins,
+              completedAt: new Date().toISOString(),
+              sessionType: parsedSession.sessionType,
+            };
+            setStudyHistory((hist) => [newSess, ...hist]);
+            AsyncStorage.removeItem('zenfocus_active_session').catch(console.error);
+          } else if (recovered === 'FOCUSING') {
+            setTimer({
+              totalSeconds: parsedSession.durationMinutes * 60,
+              remainingSeconds: focusEngine.getRemainingSeconds(),
+              isRunning: true,
+              streakDays: 4,
+              sessionName: parsedSession.sessionType,
+            });
+          }
+        } catch (err) {
+          console.warn('[ZenFocus] Error recovering focus session:', err);
+        }
       }
     } catch (e) {
       // Ignore initial load error
@@ -1243,10 +1326,15 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setAuditEvents((prev) => [audit, ...prev]);
   };
 
-  // Timer controls
+  // Focus Engine & Timer controls
   const setTimerPreset = (minutes: number) => {
     const totalSecs = Math.max(60, Math.round(minutes * 60));
     const name = minutes >= 60 ? 'Extended Deep Study' : 'Focused Study';
+    focusEngine.prepareSession({
+      durationMinutes: minutes,
+      sessionType: name,
+      strictMode,
+    });
     setTimer((prev) => ({
       ...prev,
       totalSeconds: totalSecs,
@@ -1258,6 +1346,11 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setCustomTimer = (minutes: number, sessionName: string = 'Custom Study Session') => {
     const totalSecs = Math.max(60, Math.round(minutes * 60));
+    focusEngine.prepareSession({
+      durationMinutes: minutes,
+      sessionType: sessionName,
+      strictMode,
+    });
     setTimer((prev) => ({
       ...prev,
       totalSeconds: totalSecs,
@@ -1269,14 +1362,17 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const adjustTimer = (deltaMinutes: number) => {
     const deltaSecs = deltaMinutes * 60;
+    focusEngine.adjustDeadline(deltaMinutes);
+    ZenFocusNative.adjustStudySession(deltaMinutes);
+    const remaining = focusEngine.getRemainingSeconds();
+
     setTimer((prev) => {
       let newRemaining: number;
       let newTotal: number;
 
       if (prev.isRunning) {
-        newRemaining = Math.max(60, prev.remainingSeconds + deltaSecs);
+        newRemaining = remaining > 0 ? remaining : Math.max(60, prev.remainingSeconds + deltaSecs);
         newTotal = Math.max(newRemaining, prev.totalSeconds + (deltaSecs > 0 ? deltaSecs : 0));
-        ZenFocusNative.adjustStudySession(deltaMinutes);
       } else {
         newTotal = Math.max(300, prev.totalSeconds + deltaSecs);
         newRemaining = newTotal;
@@ -1288,33 +1384,75 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         remainingSeconds: newRemaining,
       };
     });
+    AsyncStorage.setItem('zenfocus_active_session', JSON.stringify(focusEngine.getCurrentSession())).catch(console.error);
   };
 
   const startTimer = () => {
     const durationMins = Math.max(1, Math.round(timer.totalSeconds / 60));
+    if (focusEngine.getState() !== 'PREPARING') {
+      focusEngine.prepareSession({
+        durationMinutes: durationMins,
+        sessionType: timer.sessionName || 'Focused Study',
+        strictMode,
+      });
+    }
+    focusEngine.startFocus();
     ZenFocusNative.startStudySession(durationMins, timer.sessionName || 'Focused Study');
     setTimer((prev) => ({ ...prev, isRunning: true }));
+    AsyncStorage.setItem('zenfocus_active_session', JSON.stringify(focusEngine.getCurrentSession())).catch(console.error);
   };
 
   const pauseTimer = () => {
-    setTimer((prev) => ({ ...prev, isRunning: false }));
+    if (strictMode) {
+      Alert.alert(
+        'Strict Mode Active',
+        'Pause is disabled while Strict Mode is active to maintain deep focus discipline. Your session deadline remains authoritative.'
+      );
+      return;
+    }
+    const success = focusEngine.pauseFocus();
+    if (success) {
+      setTimer((prev) => ({ ...prev, isRunning: false }));
+      AsyncStorage.setItem('zenfocus_active_session', JSON.stringify(focusEngine.getCurrentSession())).catch(console.error);
+    }
   };
 
   const resetTimer = () => {
     if (timer.isRunning) {
       ZenFocusNative.stopStudySession();
     }
+    focusEngine.cancelSession(account?.role === 'PARENT');
+    focusEngine.reset();
+    AsyncStorage.removeItem('zenfocus_active_session').catch(console.error);
     setTimer((prev) => ({ ...prev, isRunning: false, remainingSeconds: prev.totalSeconds }));
   };
 
   const takeBreak = (minutes: number = 5) => {
     setIsCelebrationOpen(false);
+    focusEngine.startBreak(minutes);
     setTimer({
       totalSeconds: minutes * 60,
       remainingSeconds: minutes * 60,
       isRunning: true,
       streakDays: timer.streakDays,
     });
+  };
+
+  const toggleStrictMode = (enabled: boolean) => {
+    setStrictMode(enabled);
+    AsyncStorage.setItem('zenfocus_strict_mode', JSON.stringify(enabled)).catch(console.error);
+  };
+
+  const openUsageAccessSettings = async () => {
+    const res = await ZenFocusDpc.openUsageAccessSettings();
+    setTimeout(() => {
+      ZenFocusDpc.hasUsageStatsPermission().then(setHasUsageStatsPermission);
+    }, 2000);
+    return res;
+  };
+
+  const queryUsageStats = async () => {
+    return await ZenFocusDpc.queryUsageStats();
   };
 
   const recordCompletedSession = (durationMinutes: number, sessionType: string = 'Focused Study') => {
@@ -1395,6 +1533,12 @@ export const ZenFocusProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         startTimer,
         pauseTimer,
         resetTimer,
+        focusState,
+        strictMode,
+        toggleStrictMode,
+        hasUsageStatsPermission,
+        openUsageAccessSettings,
+        queryUsageStats,
       }}
     >
       {children}

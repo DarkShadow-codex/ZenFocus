@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useZenFocus } from '../store/ZenFocusContext';
@@ -36,6 +37,11 @@ export const ChildDashboardScreen: React.FC = () => {
     startTimer,
     pauseTimer,
     resetTimer,
+    focusState,
+    strictMode,
+    toggleStrictMode,
+    hasUsageStatsPermission,
+    openUsageAccessSettings,
     effectiveRestrictions,
     toggleChildSelfPolicy,
     submitExceptionRequest,
@@ -248,15 +254,58 @@ export const ChildDashboardScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Android Usage Access Banner */}
+      {Platform.OS === 'android' && !hasUsageStatsPermission && (
+        <View style={[styles.a11yBanner, { backgroundColor: '#18181b', borderColor: '#818cf8' }]}>
+          <View style={styles.a11yBannerLeft}>
+            <View style={[styles.a11yIconCircle, { backgroundColor: 'rgba(129, 140, 248, 0.2)' }]}>
+              <Ionicons name="stats-chart" size={20} color="#818cf8" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.a11yBannerTitle, { color: '#a5b4fc' }]}>
+                Usage Access Required
+              </Text>
+              <Text style={[styles.a11yBannerDesc, { color: '#d1d5db' }]}>
+                Grant Usage Access to enable authentic daily screen-time summaries. ZenFocus never fabricates fake statistics.
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.a11yBtn, { backgroundColor: '#6366f1' }]}
+            onPress={openUsageAccessSettings}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.a11yBtnText, { color: '#ffffff' }]}>Grant Access</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Main Zen Ring Card */}
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
         <View style={styles.cardHeader}>
           <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Study Session</Text>
           <View style={[styles.badgeFocus, { backgroundColor: timer.isRunning ? Palette.tertiaryContainer : theme.surfaceSecondary }]}>
             <Text style={[styles.badgeFocusText, { color: timer.isRunning ? Palette.onTertiary : theme.textSecondary }]}>
-              {timer.isRunning ? '● Focusing' : 'Ready'}
+              {focusState === 'FOCUSING' ? '● Focusing' : focusState === 'PAUSED' ? '⏸ Paused' : focusState === 'BREAK' ? '☕ Break' : 'Ready'}
             </Text>
           </View>
+        </View>
+
+        {/* Strict Mode Toggle Row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 6, paddingBottom: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name={strictMode ? "lock-closed" : "lock-open-outline"} size={15} color={strictMode ? Palette.primary : theme.textMuted} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: strictMode ? Palette.primary : theme.textSecondary }}>
+              Strict Mode {strictMode ? '(Enforced)' : '(Standard)'}
+            </Text>
+          </View>
+          <Switch
+            value={strictMode}
+            onValueChange={toggleStrictMode}
+            trackColor={{ false: theme.surfaceSecondary, true: Palette.primaryContainer }}
+            thumbColor={strictMode ? Palette.primary : theme.textMuted}
+            disabled={timer.isRunning}
+          />
         </View>
 
         {/* Real-time Adjustment Toast */}

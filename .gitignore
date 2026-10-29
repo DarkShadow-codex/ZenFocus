@@ -159,6 +159,7 @@ personal/
 backups/
 *.backup
 *.dump
+*.bak
 
 # ----------------------------------------------------------------------------
 # 7. Expo, EAS & Metro Build Artifacts

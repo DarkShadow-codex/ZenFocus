@@ -2,7 +2,7 @@
   "expo": {
     "name": "ZenFocus",
     "slug": "zenfocus",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.zenfocus.app",
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#060913",
         "foregroundImage": "./assets/android-icon-foreground.png",

@@ -1,0 +1,14 @@
+{
+  "name": "zenfocus-backend",
+  "version": "1.0.0",
+  "description": "ZenFocus Backend Services & Supabase Handlers",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "private": true,
+  "dependencies": {
+    "@supabase/server": "^1.9.2"
+  }
+}

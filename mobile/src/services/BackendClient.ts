@@ -16,6 +16,13 @@ import {
   AuditEvent,
 } from '../types';
 
+export interface DatabaseHealthStatus {
+  database_name: string;
+  connected_user: string;
+  server_time: string;
+  postgres_version: string;
+}
+
 export interface BackendResponse<T> {
   data: T | null;
   error: string | null;
@@ -172,6 +179,17 @@ export class BackendClientService {
         method: 'POST',
         body: JSON.stringify(session),
       }
+    );
+  }
+
+  // ===========================================================================
+  // DATABASE HEALTH & CONNECTIVITY (POSTGRESQL / SUPABASE)
+  // ===========================================================================
+
+  async checkDatabaseHealth(): Promise<BackendResponse<DatabaseHealthStatus[]>> {
+    return this.request<DatabaseHealthStatus[]>(
+      '/rpc/check_connection',
+      { method: 'POST' }
     );
   }
 }

@@ -17,6 +17,8 @@
 .env.staging
 .env.production
 *.env
+*.env.local
+*.local.env
 .netrc
 .npmrc
 .yarnrc
@@ -28,11 +30,20 @@ secret.key
 secrets.json
 secrets.yaml
 secrets.yml
+*secret*
+*secrets*
+*secret_key*
+*secretkey*
+
+# Credentials & Authentication Files
 credentials/
 credentials.*
 credentials.json
 credentials.yaml
 credentials.yml
+*.credentials
+*credential*
+*credentials*
 service-account*.json
 serviceAccountKey*.json
 service-account*.key
@@ -44,12 +55,50 @@ config.local.js
 config.local.ts
 config.private.*
 *.private.*
+
+# Private Keys, Privacy Data & Personal Information
 private/
 private_keys/
+*private_key*
+*privatekey*
+*privkey*
+*priv_key*
+*privacy*
+privacy/
+*.priv
+personal/
+personal_data/
+user_data/
+userData/
+*user_account*.json
+
+# Verification Scripts with Connection Information
+backend/verify_connection.js
+backend/test_crud_permissions.js
+
+# MCP Server Configs & AI Agent Skills
+mcp_config.json
+.mcp_config.json
+mcp.json
+.mcp/
+.agents/
+skills-lock.json
+
+# Supabase Local & Cloud Secrets
+.supabase/
+supabase/.temp/
+supabase/.branch
+supabase/.env*
 
 # ----------------------------------------------------------------------------
 # 2. API Keys, Tokens & Authentication Secrets
 # ----------------------------------------------------------------------------
+*api_key*
+*api-key*
+*apikey*
+*apikeys*
+*.apikey
+api_keys/
 api-key*.json
 apiKey*.json
 api_key*.json

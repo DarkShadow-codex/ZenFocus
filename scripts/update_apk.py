@@ -95,12 +95,17 @@ def main():
     env["JAVA_HOME"] = java_home
     env["PATH"] = os.path.join(java_home, "bin") + ";" + env.get("PATH", "")
 
+    # Load credentials securely from environment with fallback
+    ks_pass = os.environ.get("ZENFOCUS_KEYSTORE_PASSWORD", "zenfocus123")
+    key_pass = os.environ.get("ZENFOCUS_KEY_PASSWORD", ks_pass)
+    key_alias = os.environ.get("ZENFOCUS_KEY_ALIAS", "zenfocus")
+
     sign_cmd = [
         "cmd.exe", "/c", apksigner_bat, "sign",
         "--ks", keystore,
-        "--ks-pass", "pass:zenfocus123",
-        "--ks-key-alias", "zenfocus",
-        "--key-pass", "pass:zenfocus123",
+        "--ks-pass", f"pass:{ks_pass}",
+        "--ks-key-alias", key_alias,
+        "--key-pass", f"pass:{key_pass}",
         "--v1-signing-enabled", "true",
         "--v2-signing-enabled", "true",
         "--v3-signing-enabled", "true",
